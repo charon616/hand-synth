@@ -19,6 +19,7 @@ import SampleLibrary from '/Tonejs-Instruments.js';
  * Debug
  */
 const gui = new GUI()
+gui.hide()
 
 /**
  * Base
@@ -34,10 +35,6 @@ const scene = new THREE.Scene()
  */
 const video = document.getElementById('video')
 const vidTexture = new THREE.VideoTexture( video );
-
-vidTexture.wrapS = THREE.RepeatWrapping;
-vidTexture.repeat.x = -1;
-
 
 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     .then(function(stream) {
@@ -56,12 +53,13 @@ const handLandmarker = await HandLandmarker.createFromOptions(vision, {
             delegate: 'GPU'
         },
         runningMode: 'VIDEO',
-        numHands: 2
+        numHands: 4
     }
 );
 
 let lastVideoTime = -1;
-const landmarkSpheres = [];
+let landmarkSpheres = [];
+let landmarkLines = [];
 const scaler = 1;
 let handRayOrigins = []; // Array of ray origins for each hand
 let isPinching = false; // Flag to indicate if the thumb and index finger or middle finger are pinching
@@ -85,6 +83,163 @@ function ndcToWorld(ndcX, ndcY) {
     
     return new THREE.Vector3(worldX, worldY, 0); // z=0
 }
+
+function drawInterpolatedLines(landmarks, waveform) {
+    const numPoints = 10; // Number of points to interpolate
+
+    const interpolate = (start, end, t) => {
+        return {
+            x: start.x + (end.x - start.x) * t,
+            y: start.y + (end.y - start.y) * t,
+            z: start.z + (end.z - start.z) * t,
+        };
+    };
+
+    const points1 = [];
+    const points2 = [];
+
+    for (let i = 0; i <= numPoints; i++) {
+        const t = i / numPoints;
+
+        let pos1 = ndcToWorld(-landmarks[1].x * 2 + 1, -landmarks[1].y * 2 + 1);
+        let pos2 = ndcToWorld(-landmarks[5].x * 2 + 1, -landmarks[5].y * 2 + 1);
+        let pos3 = ndcToWorld(-landmarks[0].x * 2 + 1, -landmarks[0].y * 2 + 1);
+        let pos4 = ndcToWorld(-landmarks[17].x * 2 + 1, -landmarks[17].y * 2 + 1);
+
+        // Adjust positions based on waveform data
+        const waveformIndex = Math.floor((i / numPoints) * waveform.length);
+        const amplitude = waveform[waveformIndex] * 0.1; // Adjust the amplitude scale as needed
+
+        pos1.y += amplitude;
+        pos2.y += amplitude;
+        pos3.y += amplitude;
+        pos4.y += amplitude;
+
+        points1.push(interpolate(pos1, pos2, t));
+        points2.push(interpolate(pos3, pos4, t));
+    }
+
+    // beginShape();
+    // for (let i = 0; i < values.length; i++) {
+    //   const amplitude = values[i];
+    //   const x = map(i, 0, values.length - 1, 0, width);
+    //   const y = height / 2 + amplitude * height;
+    //   // Place vertex
+    //   vertex(x, y);
+    // }
+    // endShape();
+
+    let lineIndex = 0;
+    for (let i = 0; i < points1.length; i++) {
+        let line;
+        const points = []
+        for (let i = 0; i < waveform.length; i++) {
+            const amplitude = waveform[i];
+            const x = mapRange(i, 0, waveform.length - 1, 0, 6);
+            const y = 10 / 2 + amplitude * 10;
+            const z = 0
+            const p = new THREE.Vector3(x,y,z);
+            points.push(p);
+        }
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const h = Math.round((i / lineNum) * 360);
+        const s = 100;
+        const l = Math.round((i / lineNum) * 100);
+        const color = new THREE.Color(`hsl(${h},${s}%,${l}%)`);
+        
+        const material = new THREE.LineBasicMaterial({
+            color:color
+        });
+            
+        const l2 = new THREE.Line(geometry,material);
+        lineArr[i] = l2;
+        // scene.add(lineArr[i]);
+
+        // if (lineIndex < landmarkLines.length) {
+        //     // Update existing line
+        //     // line = landmarkLines[lineIndex];
+        //     // line.geometry.setFromPoints([
+        //     //     new THREE.Vector3(points1[i].x, points1[i].y, points1[i].z),
+        //     //     new THREE.Vector3(points2[i].x, points2[i].y, points2[i].z),
+        //     // ]);
+        // } else {
+        //     // Create new line
+        //     // const geometry = new THREE.BufferGeometry().setFromPoints([
+        //     //     new THREE.Vector3(points1[i].x, points1[i].y, points1[i].z),
+        //     //     new THREE.Vector3(points2[i].x, points2[i].y, points2[i].z),
+        //     // ]);
+        //     // const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        //     // line = new THREE.Line(geometry, material);
+        //     // scene.add(line);
+        //     // landmarkLines.push(line);
+        // }
+        // lineIndex++;
+    }
+
+    // Remove any extra lines
+    while (lineIndex < landmarkLines.length) {
+        const line = landmarkLines.pop();
+        scene.remove(line);
+    }
+}
+
+// function drawInterpolatedLines(landmarks) {
+//     const numPoints = 100; // Number of points to interpolate
+
+//     const interpolate = (start, end, t) => {
+//         return {
+//             x: start.x + (end.x - start.x) * t,
+//             y: start.y + (end.y - start.y) * t,
+//             z: start.z + (end.z - start.z) * t,
+//         };
+//     };
+
+//     const points1 = [];
+//     const points2 = [];
+
+//     for (let i = 0; i <= numPoints; i++) {
+//         const t = i / numPoints;
+
+//         let pos1 = ndcToWorld(-landmarks[1].x * 2 + 1, -landmarks[1].y * 2 + 1)
+//         let pos2 = ndcToWorld(-landmarks[5].x * 2 + 1, -landmarks[5].y * 2 + 1)
+//         let pos3 = ndcToWorld(-landmarks[0].x * 2 + 1, -landmarks[0].y * 2 + 1)
+//         let pos4 = ndcToWorld(-landmarks[17].x * 2 + 1, -landmarks[17].y * 2 + 1)
+
+//         points1.push(interpolate(pos1, pos2, t));
+//         points2.push(interpolate(pos3, pos4, t));
+//     }
+
+//     let lineIndex = 0;
+//     for (let i = 0; i < points1.length; i++) {
+//         let line;
+//         if (lineIndex < landmarkLines.length) {
+//             // Update existing line
+//             line = landmarkLines[lineIndex];
+//             line.geometry.setFromPoints([
+//                 new THREE.Vector3(points1[i].x, points1[i].y, points1[i].z),
+//                 new THREE.Vector3(points2[i].x, points2[i].y, points2[i].z),
+//             ]);
+//         } else {
+//             // Create new line
+//             const geometry = new THREE.BufferGeometry().setFromPoints([
+//                 new THREE.Vector3(points1[i].x, points1[i].y, points1[i].z),
+//                 new THREE.Vector3(points2[i].x, points2[i].y, points2[i].z),
+//             ]);
+//             const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+//             line = new THREE.Line(geometry, material);
+//             scene.add(line);
+//             landmarkLines.push(line);
+//         }
+//         lineIndex++;
+//     }
+
+//     // Remove any extra lines
+//     while (lineIndex < landmarkLines.length) {
+//         const line = landmarkLines.pop();
+//         scene.remove(line);
+//     }
+// }
 
 function processResults(results) {
     // Clear previous hand ray origins
@@ -152,6 +307,13 @@ function processResults(results) {
                 landmarkSpheres[8].material.color.set(0xffffff); // Change index finger to red
                 isPinching = false;
             }
+
+            // Draw interpolated lines
+            // Get waveform data
+            // const waveform = analyser.getValue();
+
+            // Draw interpolated lines with waveform data
+            // drawInterpolatedLines(landmarks, waveform);
         }
         // Remove any extra spheres
         while (sphereIndex < landmarkSpheres.length) {
@@ -283,19 +445,20 @@ landmarkMaterial.thickness = 0.1
  * Objects
  */
 const vibrantColors = [
-    0xff5733, // Vibrant Red
-    0xffbd33, // Vibrant Orange
-    0xff33ff, // Vibrant Pink
-    0x33ff57, // Vibrant Green
-    0x3357ff, // Vibrant Blue
-    0x33fff5, // Vibrant Cyan
-    0xff33a8, // Vibrant Magenta
-    0xa833ff  // Vibrant Purple
+    0xef2a28, // red
+    0xffe300, // yellow
+    0xa8c7fa, // lightblue
+    0xff85c3, // pink
+    0x2d5ed5, // blue
+    0x48c9b0, // green
+    0xf39c12, // orange
+    0x85929e, // gray
+    0xd580ff // purple
 ];
 
 const notes = [];
-// const notePositions = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
-const notePositions = [-5, -3, -1, 0, 1, 3, 5];
+const notePositions = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+// const notePositions = [-5, -3, -1, 0, 1, 3, 5];
 
 for (let i = 0; i < notePositions.length; i++) {
     let geometry;
@@ -327,13 +490,57 @@ for (let i = 0; i < notePositions.length; i++) {
         z: Math.random() * 0.5
     };
 
+    const ypos = Math.random() * 6 - 3;
+
     note.position.x = notePositions[i];
+    note.position.y = ypos;
     note.position.z = 0;
     note.castShadow = true;
     notes.push(note);
     scene.add(note);
 }
 
+let lineArr = [];
+const lineNum = 50;
+const lineLength = 10;
+const segmentNum = 100;
+const amplitude = 5;
+
+function drawLines() {
+    const time = Date.now() / 4000;
+    for(let i = 0; i < lineNum; i++){
+        const points = [];
+    
+        for(let j = 0; j <= segmentNum; j++){
+            const x = ((lineLength/segmentNum) * j) - lineLength / 2;
+            const px = j / (50 + i);
+            const py = i / 50 + time;
+            const y = amplitude * noise.perlin2(px,py) + 3;
+    
+            //Z軸を調整
+            const z = i * 0.1 - ((lineNum * 0.1) / 2);
+    
+            const p = new THREE.Vector3(x,y,z);
+            points.push(p);
+        }
+    
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const h = Math.round((i / lineNum) * 360);
+        const s = 100;
+        const l = Math.round((i / lineNum) * 100);
+        const color = new THREE.Color(`hsl(${h},${s}%,${l}%)`);
+        
+        const material = new THREE.LineBasicMaterial({
+            color:color
+        });
+            
+        const line = new THREE.Line(geometry,material);
+        lineArr[i] = line
+        scene.add(lineArr[i]);
+    }
+}
+
+// drawLines();
 
 /**
  * Models
@@ -414,10 +621,9 @@ rgbeLoader.load('/textures/environmentMap/studio_small_09_4k.hdr', (environmentM
     // set intensity
     environmentMap.encoding = THREE.RGBEEncoding
 
-    // scene.background = environmentMap
     scene.background = new THREE.Color(0xD6D5D9)
     scene.environment = environmentMap
-
+    // scene.background = environmentMap
 })
 
 /**
@@ -468,6 +674,10 @@ const aspect = sizes.width / sizes.height;
 // Define the frustum size
 const frustumSize = 6;
 
+// const camera = new THREE.PerspectiveCamera(
+
+// )
+
 // Create an Orthographic Camera
 const camera = new THREE.OrthographicCamera(
     frustumSize * aspect / -2, // left
@@ -489,34 +699,26 @@ controls.enableDamping = true
  * Audio
  */
 
-//create a synth and connect it to the main output (your speakers)
-const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-synth.set({
-    envelope: {
-        attack: 0.2,
-		decay: 0.2,
-		sustain: 0.3,
-		release: 0.5,
-    }
-})
-let now;
-
 const bgmPlayer = new Tone.Player({
-    url: "/sounds/sub-bass-line-by-alien-i-trust-125_bpm-289271.mp3",
+    url: "/sounds/578599__auwenngebleau__slow-rain.m4a",
+    // url: "/sounds/sub-bass-line-by-alien-i-trust-125_bpm-289271.mp3",
     loop: true,
 }).toDestination();
 // const distortion = new Tone.Distortion(0.4).toDestination();
 // const filter = new Tone.Filter(400, "lowpass").toDestination();
-const analyser = new Tone.Analyser("fft", 1024);
+// const analyser = new Tone.Analyser("fft", 1024);
+const analyser = new Tone.Analyser('waveform', 128);
 Tone.loaded().then(() => {
     // bgmPlayer.connect(distortion);
     // bgmPlayer.connect(filter);
     bgmPlayer.connect(analyser);
 })
 
+let isStart = false
 document.getElementById('start-button').addEventListener('click', async () => {
     await Tone.start();
     bgmPlayer.start();
+    isStart = true
     document.getElementById('start-screen').style.display = 'none';
 });
 
@@ -556,19 +758,77 @@ function mapRange(value, inMin, inMax, outMin, outMax) {
 //     },
 // }).toDestination();
 
+// Setup a reverb with ToneJS
+const reverb = new Tone.Reverb({
+    decay: 4,
+    wet: 0.2,
+    preDelay: 0.25,
+});
 
-function playSingleSound(height) {
-    const availableNotes = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"];
-    const noteIndex = Math.floor(mapRange(height, -3, 3, 0, availableNotes.length - 1));
-    const n = availableNotes[noteIndex];
-    const mappedValue = mapRange(height, -3, 3, 80, 200);
+// Load the reverb
+await reverb.generate();
 
+// Create an effect node that creates a feedback delay
+const effect = new Tone.FeedbackDelay("8n", 1 / 3);
+effect.wet.value = 0.2;
+
+function playSound(heights) {
+    const availableNotes = [
+        "C2", "D2", "E2", "F2", "G2", "A2", "B2",
+        "C3", "D3", "E3", "F3", "G3", "A3", "B3",
+        "C4", "D4", "E4", "F4", "G4", "A4", "B4",
+        "C5", "D5", "E5", "F5", "G5", "A5", "B5",
+        "C6", "D6", "E6", "F6", "G6", "A6", "B6"
+      ];
+
+    let ns = []
+    for(let height of heights){
+        const noteIndex = Math.floor(mapRange(height, -3, 3, 0, availableNotes.length - 1));
+        const n = availableNotes[noteIndex];
+        ns.push(n)
+    }
+    
+    // const mappedValue = mapRange(height, -3, 3, 80, 200);
     // now = Tone.now();
     // synth.triggerAttackRelease(mappedValue, "8n", now);
-    synth.triggerAttackRelease(mappedValue, "8n", now);
+    const velocity = Math.random() * 0.5 + 0.5;
 
-    // piano.triggerAttackRelease(n);
-    // synth.triggerAttackRelease("A4", "8n", now + 1);
+    //create a synth and connect it to the main output (your speakers)
+    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+    synth.set({
+        voice0: {
+        oscillator: {
+            type: "triangle4",
+        },
+        volume: -30,
+        envelope: {
+            attack: 0.005,
+            release: 0.05,
+            sustain: 1,
+        },
+        },
+        voice1: {
+        volume: -10,
+        envelope: {
+            attack: 0.005,
+            release: 0.05,
+            sustain: 1,
+        },
+        },
+    });
+    synth.volume.value = -5;
+
+    // const testsynth = new Tone.PolySynth().toDestination();
+    // //play a chord
+    // testsynth.triggerAttackRelease(["C4", "E4", "A4"], 1);
+
+    synth.triggerAttackRelease(ns, "8n", Tone.now(), velocity);
+    // synth.triggerAttackRelease(n, "8n", Date.now, velocity);
+    // // Wire up our nodes:
+    synth.connect(effect);
+    synth.connect(Tone.Master);
+    effect.connect(reverb);
+    reverb.connect(Tone.Master);
 }
 
 /**
@@ -616,18 +876,18 @@ const plane = new THREE.Mesh(
 plane.rotation.y = Math.PI; 
 plane.position.z = -1
 plane.receiveShadow = true;
-scene.add(plane);
+// scene.add(plane);
 
 // video plane
-const videoPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(2, 1.5),
-    new THREE.MeshBasicMaterial({ map: vidTexture })
-)
-// videoPlane.rotation.y = Math.PI;
-videoPlane.position.x = 2
-videoPlane.position.y = -2
-videoPlane.position.z = 1
-scene.add(videoPlane);
+// const videoPlane = new THREE.Mesh(
+//     new THREE.PlaneGeometry(2, 1.5),
+//     new THREE.MeshBasicMaterial({ map: vidTexture })
+// )
+// // videoPlane.rotation.y = Math.PI;
+// videoPlane.position.x = 2
+// videoPlane.position.y = -2
+// videoPlane.position.z = 1
+// scene.add(videoPlane);
 
 /**
  * Mouse
@@ -647,7 +907,7 @@ const clock = new THREE.Clock()
 
 let currentIntersect = null
 let modelIntersects = null
-let progressIntersects = null
+let currentProgressIntersectsObjects = null
 
 const tick = () =>
 {
@@ -662,9 +922,9 @@ const tick = () =>
     const deltaTime = clock.getDelta()
     const elapsedTime = clock.getElapsedTime()
 
-    // Animate objects
-    notes[0].position.y = Math.sin(elapsedTime * 0.3) * 1.5
-    notes[2].position.y = Math.sin(elapsedTime * 1.4) * 1.5
+    // // Animate objects
+    // notes[0].position.y = Math.sin(elapsedTime * 0.3) * 1.5
+    // notes[2].position.y = Math.sin(elapsedTime * 1.4) * 1.5
 
     for (const note of notes) {
         note.rotation.x += note.rotationSpeed.x * deltaTime;
@@ -672,7 +932,7 @@ const tick = () =>
         note.rotation.z += note.rotationSpeed.z * deltaTime;
     }
 
-    progressBar.position.x += deltaTime * 1.5
+    progressBar.position.x += deltaTime * 1.75
     if(progressBar.position.x > 7)
     {
         progressBar.position.x = -7
@@ -739,21 +999,73 @@ const tick = () =>
     progressRaycaster.set(progressBarPosition, progressBarDirection);
     const progressBarIntersects = progressRaycaster.intersectObjects(objectsToTest);
     
-    if(progressBarIntersects.length)
-    {
-        if(progressIntersects === null)
+    if(isStart){
+        if(progressBarIntersects.length)
         {
-            if(piano.loaded){
-                playSingleSound(progressBarIntersects[0].object.position.y);
+            for(const intersect of progressBarIntersects){
+                intersect.object.scale.set(1.3, 1.3, 1.3)
             }
+    
+            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressBarIntersects.length)
+            {
+                const heights = []
+                for (const intersect of progressBarIntersects) {
+                    // heights.push(intersect.object.position.y);
+                    if(currentProgressIntersectsObjects === null){
+                        heights.push(intersect.object.position.y);
+                    } else {
+                        for (let k of currentProgressIntersectsObjects){
+                            if(k.uuid !== intersect.object.uuid){
+                                console.log('new')
+                                heights.push(intersect.object.position.y)
+                            }
+                        }
+                    }
+                }
+                console.log(heights.length)
+                playSound(heights);
+            }
+            const tests = progressBarIntersects.map(inter => inter.object)
+            currentProgressIntersectsObjects = tests
+        } else {
+            if(currentProgressIntersectsObjects)
+            {
+                for(const object of objectsToTest)
+                    {
+                        object.scale.set(1, 1, 1)
+                        // object.material.color.set('#2e46ff')
+                    }
+            }
+            currentProgressIntersectsObjects = null
         }
-        progressIntersects = progressBarIntersects[0]
-    } else {
-        if(progressIntersects)
-        {
-        }
-        progressIntersects = null
     }
+
+    // for(let i = 0; i < lineNum; i++){
+    //     const line = lineArr[i];
+    //     const positions = line.geometry.attributes.position.array;
+    //     const time = Date.now() / 4000;
+ 
+    //     for(let j = 0; j <= segmentNum; j++){
+    //         const x = ((lineLength/segmentNum) * j) - lineLength / 2;
+    //         const px = j / (50 + i);
+    //         const py = i / 50 + time;
+    //         const y =  amplitude * noise.perlin2(px,py);
+    //         const z = i * 0.3 - ((lineNum * 0.3) / 2);
+    //         positions[j * 3] = x;
+    //         positions[j * 3 + 1] = y;
+    //         positions[j * 3 + 2 ] = z;
+    //     }
+ 
+    //     const h = Math.round((i / lineNum) * 360);
+    //     const s = 100;
+    //     const l = Math.round((i / lineNum) * 100);
+    //     const color = new THREE.Color(`hsl(${h},${s}%,${l}%)`);
+ 
+    //     line.material.color = color;
+ 
+    //     line.geometry.attributes.position.needsUpdate = true;
+    // }
+ 
 
 
     // Detect hands
