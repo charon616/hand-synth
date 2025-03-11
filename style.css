@@ -24,8 +24,8 @@ body
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
+    background: rgba(128, 128, 128, 0.1);
+    backdrop-filter: blur(8px);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -34,15 +34,18 @@ body
 
 #start-button {
     padding: 20px 40px;
-    font-size: 24px;
+    font-size: 2rem;
+    letter-spacing: .1rem;
     color: white;
-    background: #2e46ff;
-    border: none;
-    border-radius: 5px;
+    border: 4px solid white;
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(24px);
+    border-radius: 2rem;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: all 0.3s ease-out;
 }
 
 #start-button:hover {
-    background: #1e36ff;
+    background: rgba(255, 255, 255, 0.4);
+    letter-spacing: .2rem;
 }
