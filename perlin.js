@@ -304,7 +304,7 @@
         lerp(
           lerp(n010, n110, u),
           lerp(n011, n111, u), w),
-       v);
+        v);
   };
 
 })(this);

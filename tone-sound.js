@@ -5,8 +5,6 @@ const bgmPlayer = new Tone.Player({
   url: "/sounds/578599__auwenngebleau__slow-rain.m4a",
   loop: true,
 }).toDestination();
-const distortion = new Tone.Distortion(0.4).toDestination();
-const filter = new Tone.Filter(400, "lowpass").toDestination();
 // const analyser = new Tone.Analyser("fft", 1024);
 const analyser = new Tone.Analyser('waveform', 128);
 Tone.loaded().then(() => {

@@ -1,5 +1,7 @@
 import * as THREE from 'three'
+
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
@@ -7,9 +9,10 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { MeshPostProcessingMaterial } from 'three/addons/materials/MeshPostProcessingMaterial.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
-import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+
+import { detectFrame } from './hand-detection.js'
 import { startSound, playSound } from './tone-sound.js'
+
 /**
  * Base
  */
@@ -22,43 +25,123 @@ const scene = new THREE.Scene()
 /**
  * Video
  */
-const video = document.getElementById('video')
-const vidTexture = new THREE.VideoTexture( video );
+// const video = document.getElementById('video')
+// const vidTexture = new THREE.VideoTexture( video );
 
-navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-    .then(function(stream) {
-        video.srcObject = stream;
-        video.play();
-    })
-    .catch(function(err) {
-        console.log("An error occurred! " + err);
-    });
+// navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+//     .then(function(stream) {
+//         video.srcObject = stream;
+//         video.play();
+//     })
+//     .catch(function(err) {
+//         console.log("An error occurred! " + err);
+//     });
+const HANDS_NUM = 4;
 
-// Media Pipe
-const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
-const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-            delegate: 'GPU'
-        },
-        runningMode: 'VIDEO',
-        numHands: 4
+export function processResults(results) {
+    // Clear previous hand ray origins
+    handRayOrigins = [];
+  
+    // Create or update spheres based on the number of landmarks
+    if (results.landmarks) {
+        let sphereIndex = 0;
+        for (let i = 0; i < results.landmarks.length; i++) {
+            const landmarks = results.landmarks[i];
+            for (let j = 0; j < landmarks.length; j++) {
+                const landmark = landmarks[j];
+                let sphere;
+                if (sphereIndex < landmarkSpheres[i].length) {
+                    // Update existing sphere
+                    sphere = landmarkSpheres[i][sphereIndex];
+                } else {
+                    // Create new sphere
+                    if(j === 4 || j === 8 || j === 12) {
+                        sphere = createLandmarkSphere(0.15);
+                    }
+                    else {
+                        sphere = createLandmarkSphere(0.1);
+                    }
+                    landmarkSpheres[i].push(sphere);
+                }
+                // Convert landmark coordinates to world coordinates
+                // Mirror x-axis
+                let pos = ndcToWorld(-landmark.x * 2 + 1, -landmark.y * 2 + 1);
+  
+                sphere.position.set(pos.x, pos.y, pos.z);
+                sphereIndex++;
+            }
+  
+            // Calculate distance between thumb (j=4) and index finger (j=8) or middle finger (j=12)
+            const thumb = landmarks[4];
+            const indexFinger = landmarks[8];
+            const middleFinger = landmarks[12];
+  
+            // mirror x-axis
+            handRayOrigins.push(new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z));
+  
+            const distanceToIndex = Math.sqrt(
+                Math.pow(thumb.x - indexFinger.x, 2) +
+                Math.pow(thumb.y - indexFinger.y, 2) +
+                Math.pow(thumb.z - indexFinger.z, 2)
+            );
+  
+            const distanceToMiddle = Math.sqrt(
+                Math.pow(thumb.x - middleFinger.x, 2) +
+                Math.pow(thumb.y - middleFinger.y, 2) +
+                Math.pow(thumb.z - middleFinger.z, 2)
+            );
+  
+            const threshold = 0.1; // Set your threshold distance here
+  
+            if (distanceToIndex < threshold || distanceToMiddle < threshold) {
+                // Change color of thumb and index finger spheres if distance is below threshold
+                landmarkSpheres[i][4].material.color.set(0x2e46ff); // Change thumb to green
+                landmarkSpheres[i][8].material.color.set(0x2e46ff); // Change index finger to green
+                isPinching[i] = true;
+            } else {
+                // Reset color of thumb and index finger spheres
+                landmarkSpheres[i][4].material.color.set(0xffffff); // Change thumb to red
+                landmarkSpheres[i][8].material.color.set(0xffffff); // Change index finger to red
+                isPinching[i] = false;
+            }
+  
+            // Draw interpolated lines
+            // Get waveform data
+            // const waveform = analyser.getValue();
+  
+            // Draw interpolated lines with waveform data
+            // drawInterpolatedLines(landmarks, waveform);
+        }
+        // Remove any extra spheres
+        for(let i = 0; i < HANDS_NUM; i++) {
+            while (sphereIndex < landmarkSpheres[i].length) {
+                const sphere = landmarkSpheres[i].pop();
+                scene.remove(sphere);
+                handRayOrigins = [];
+            }
+        }
+    } else {
+        // No landmarks detected, remove all spheres
+        for(let i = 0; i < HANDS_NUM; i++) {
+            while (landmarkSpheres[i].length > 0) {
+                const sphere = landmarkSpheres[i].pop();
+                scene.remove(sphere);
+            }
+        }
+        handRayOrigins = [];
+        for(let p of isPinching){
+            p = false
+        }
     }
-);
+  }
 
-let lastVideoTime = -1;
-let landmarkSpheres = [];
+let landmarkSpheres = new Array(HANDS_NUM).fill([]);
 let landmarkLines = [];
-const scaler = 1;
 let handRayOrigins = []; // Array of ray origins for each hand
-let isPinching = false; // Flag to indicate if the thumb and index finger or middle finger are pinching
+let isPinching = new Array(HANDS_NUM).fill(false) // Flag to indicate if the thumb and index finger or middle finger are pinching
 
 function createLandmarkSphere(size) {
     const geometry = new THREE.SphereGeometry(size || 0.1, 8, 8);
-
-    // const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    // const sphere = new THREE.Mesh(geometry, matcapMaterial);
-    // const sphere = new THREE.Mesh(geometry, landmarkMaterial.clone());
     const sphere = new THREE.Mesh(geometry, landmarkMaterial.clone());
     scene.add(sphere);
     return sphere;
@@ -108,16 +191,6 @@ function drawInterpolatedLines(landmarks, waveform) {
         points1.push(interpolate(pos1, pos2, t));
         points2.push(interpolate(pos3, pos4, t));
     }
-
-    // beginShape();
-    // for (let i = 0; i < values.length; i++) {
-    //   const amplitude = values[i];
-    //   const x = map(i, 0, values.length - 1, 0, width);
-    //   const y = height / 2 + amplitude * height;
-    //   // Place vertex
-    //   vertex(x, y);
-    // }
-    // endShape();
 
     let lineIndex = 0;
     for (let i = 0; i < points1.length; i++) {
@@ -231,97 +304,9 @@ function drawInterpolatedLines(landmarks, waveform) {
 //     }
 // }
 
-function processResults(results) {
-    // Clear previous hand ray origins
-    handRayOrigins = [];
-
-    // Create or update spheres based on the number of landmarks
-    if (results.landmarks) {
-        let sphereIndex = 0;
-        for (let i = 0; i < results.landmarks.length; i++) {
-            const landmarks = results.landmarks[i];
-            for (let j = 0; j < landmarks.length; j++) {
-                const landmark = landmarks[j];
-                let sphere;
-                if (sphereIndex < landmarkSpheres.length) {
-                    // Update existing sphere
-                    sphere = landmarkSpheres[sphereIndex];
-                } else {
-                    // Create new sphere
-                    if(j === 4 || j === 8 || j === 12) {
-                        sphere = createLandmarkSphere(0.15);
-                    }
-                    else {
-                        sphere = createLandmarkSphere(0.1);
-                    }
-                    landmarkSpheres.push(sphere);
-                }
-                // Convert landmark coordinates to world coordinates
-                // mirror x-axis
-                let pos = ndcToWorld(-landmark.x * 2 + 1, -landmark.y * 2 + 1);
-
-                sphere.position.set(pos.x, pos.y, pos.z);
-                sphereIndex++;
-            }
-
-            // Calculate distance between thumb (j=4) and index finger (j=8) or middle finger (j=12)
-            const thumb = landmarks[4];
-            const indexFinger = landmarks[8];
-            const middleFinger = landmarks[12];
-
-            // mirror x-axis
-            handRayOrigins.push(new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z));
-
-            const distanceToIndex = Math.sqrt(
-                Math.pow(thumb.x - indexFinger.x, 2) +
-                Math.pow(thumb.y - indexFinger.y, 2) +
-                Math.pow(thumb.z - indexFinger.z, 2)
-            );
-
-            const distanceToMiddle = Math.sqrt(
-                Math.pow(thumb.x - middleFinger.x, 2) +
-                Math.pow(thumb.y - middleFinger.y, 2) +
-                Math.pow(thumb.z - middleFinger.z, 2)
-            );
-
-            const threshold = 0.1; // Set your threshold distance here
-
-            if (distanceToIndex < threshold || distanceToMiddle < threshold) {
-                // Change color of thumb and index finger spheres if distance is below threshold
-                landmarkSpheres[4].material.color.set(0x2e46ff); // Change thumb to green
-                landmarkSpheres[8].material.color.set(0x2e46ff); // Change index finger to green
-                isPinching = true;
-            } else {
-                // Reset color of thumb and index finger spheres
-                landmarkSpheres[4].material.color.set(0xffffff); // Change thumb to red
-                landmarkSpheres[8].material.color.set(0xffffff); // Change index finger to red
-                isPinching = false;
-            }
-
-            // Draw interpolated lines
-            // Get waveform data
-            // const waveform = analyser.getValue();
-
-            // Draw interpolated lines with waveform data
-            // drawInterpolatedLines(landmarks, waveform);
-        }
-        // Remove any extra spheres
-        while (sphereIndex < landmarkSpheres.length) {
-            const sphere = landmarkSpheres.pop();
-            scene.remove(sphere);
-            handRayOrigins = [];
-        }
-    } else {
-        // No landmarks detected, remove all spheres
-        while (landmarkSpheres.length > 0) {
-            const sphere = landmarkSpheres.pop();
-            scene.remove(sphere);
-        }
-        handRayOrigins = [];
-        isPinching = false;
-    }
-}
-
+/**
+ * Material
+ */
 // MeshPhysicalMaterial for notes elements
 const material = new THREE.MeshPhysicalMaterial()
 material.metalness = 0
@@ -469,11 +454,7 @@ function drawLines() {
 /**
  * Models
  */
-const dracoLoader = new DRACOLoader()
-dracoLoader.setDecoderPath('/draco/')
-
 const gltfLoader = new GLTFLoader()
-gltfLoader.setDRACOLoader(dracoLoader)
 
 let cat = null;
 gltfLoader.load(
@@ -547,7 +528,7 @@ rgbeLoader.load('/textures/environmentMap/studio_small_09_4k.hdr', (environmentM
 /**
  * Raycaster
  */
-const raycaster = new THREE.Raycaster();
+const raycaster = new Array(HANDS_NUM).fill().map(() => new THREE.Raycaster());
 let offset = new THREE.Vector3();
 let basePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // z=0のxy平面
 
@@ -707,55 +688,52 @@ const tick = () =>
     // Cast a ray
     const objectsToTest = notes
 
+    // let intersects = []
     // Cast rays from all index fingers
     if(handRayOrigins.length > 0) {
-        const rayOrigin = handRayOrigins[0];
-        // const rayDirection = new THREE.Vector3(0, 0, -1); // Assuming the ray direction is along the negative z-axis
-        // raycaster.set(rayOrigin, rayDirection);
-        // raycaster.setFromCamera(new THREE.Vector2(rayOrigin.x, rayOrigin.y), camera);
-        raycaster.setFromCamera(rayOrigin, camera);
-        const intersects = raycaster.intersectObjects(objectsToTest);
-
-        if(cat){
-            modelIntersects = raycaster.intersectObject(cat, true)
-    
-            if(modelIntersects.length)
-            {
-                cat.scale.set(0.6, 0.6, 0.6)
-            } 
+        let intersects = []
+        for(let i=0; i<handRayOrigins.length; i++) {
+            const rayOrigin = handRayOrigins[i];
+            raycaster[i].setFromCamera(rayOrigin, camera);
+            let tempIntersects = raycaster[i].intersectObjects(objectsToTest);
+            for (const intersect of tempIntersects) {
+                intersect.rayIndex = i;
+            }
+            intersects = intersects.concat(tempIntersects);
         }
+
+        // if(cat){
+        //     modelIntersects = raycaster.intersectObject(cat, true)
     
-        // reset to default1
+        //     if(modelIntersects.length)
+        //     {
+        //         cat.scale.set(0.6, 0.6, 0.6)
+        //     } 
+        // }
+    
+        // reset to default
         for(const object of objectsToTest)
         {
             object.scale.set(1, 1, 1)
-            // object.material.color.set('#2e46ff')
         }
     
         // change if intersect
         for(const intersect of intersects)
         {
             intersect.object.scale.set(1.3, 1.3, 1.3)
-            // intersect.object.material.color.set('#ff0000')
         }
     
         if(intersects.length)
         {
-            if(currentIntersect === null)
-            {
-            }
             currentIntersect = intersects[0]
         } else {
-            if(currentIntersect)
-            {
-            }
             currentIntersect = null
         }
 
-        if (isPinching && currentIntersect) {
+        if (isPinching[0] && currentIntersect) {
             // Convert screen coordinates to world coordinates
             const intersection = new THREE.Vector3();
-            raycaster.ray.intersectPlane(basePlane, intersection); // move objects on xy plane
+            raycaster[0].ray.intersectPlane(basePlane, intersection); // move objects on xy plane
             currentIntersect.object.position.copy(intersection);
         }
     }
@@ -832,14 +810,10 @@ const tick = () =>
  
     //     line.geometry.attributes.position.needsUpdate = true;
     // }
- 
 
-
-    // Detect hands
-    if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
-        const handLandmarkerResult = handLandmarker.detectForVideo(video, Date.now());
-        processResults(handLandmarkerResult);
-        lastVideoTime = video.currentTime;
+    const result = detectFrame()
+    if(result){
+        processResults(result);
     }
 
     // Update controls
