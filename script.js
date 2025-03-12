@@ -1,26 +1,15 @@
 import * as THREE from 'three'
-import * as Tone from "tone"; // sound library
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import GUI from 'lil-gui'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
-import { GlitchPass } from 'three/addons/postprocessing/GlitchPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { MeshPostProcessingMaterial } from 'three/addons/materials/MeshPostProcessingMaterial.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-import SampleLibrary from '/Tonejs-Instruments.js';
-
-/**
- * Debug
- */
-const gui = new GUI()
-gui.hide()
-
+import { startSound, playSound } from './tone-sound.js'
 /**
  * Base
  */
@@ -75,6 +64,7 @@ function createLandmarkSphere(size) {
     return sphere;
 }
 
+// convert ndc coordinates to world coordinates
 function ndcToWorld(ndcX, ndcY) {
     const aspect = (camera.right - camera.left) / (camera.top - camera.bottom);
 
@@ -332,100 +322,34 @@ function processResults(results) {
     }
 }
 
-/**
- * Textures
- */
-const textureLoader = new THREE.TextureLoader()
-const doorColorTexture = textureLoader.load('/textures/door/color.jpg')
-const doorAlphaTexture = textureLoader.load('/textures/door/alpha.jpg')
-const doorAmbientOcclusionTexture = textureLoader.load('/textures/door/ambientOcclusion.jpg')
-const doorHeightTexture = textureLoader.load('/textures/door/height.jpg')
-const doorNormalTexture = textureLoader.load('/textures/door/normal.jpg')
-const doorMetalnessTexture = textureLoader.load('/textures/door/metalness.jpg')
-const doorRoughnessTexture = textureLoader.load('/textures/door/roughness.jpg')
-const matcapTexture = textureLoader.load('/textures/matcaps/3.png')
-const gradientTexture = textureLoader.load('/textures/gradients/5.jpg')
-doorColorTexture.colorSpace = THREE.SRGBColorSpace
-matcapTexture.colorSpace = THREE.SRGBColorSpace
-
-/** 
- * Material
- */
-// MeshBasicMaterial
-// const basicMaterial = new THREE.MeshBasicMaterial()
-// basicMaterial.map = doorColorTexture
-// basicMaterial.color = new THREE.Color(0x00ff00)
-// basicMaterial.wireframe = true
-// basicMaterial.transparent = true
-// basicMaterial.alphaMap = doorAlphaTexture
-// basicMaterial.side = THREE.DoubleSide
-
-// MeshMatcapMaterial
-const matcapMaterial = new THREE.MeshMatcapMaterial()
-matcapMaterial.matcap = matcapTexture
-
-// MeshPhysicalMaterial
+// MeshPhysicalMaterial for notes elements
 const material = new THREE.MeshPhysicalMaterial()
 material.metalness = 0
 material.roughness = 0.05
-// material.map = doorColorTexture
-// material.aoMap = doorAmbientOcclusionTexture
-// material.aoMapIntensity = 1
-// material.displacementMap = doorHeightTexture
-// material.displacementScale = 0.2
-// material.metalnessMap = doorMetalnessTexture
-// material.roughnessMap = doorRoughnessTexture
-// material.normalMap = doorNormalTexture
-// material.normalScale.set(0.5, 0.5)
 material.transparent = true
-// material.alphaMap = doorAlphaTexture
 
 // Clearcoat
 material.clearcoat = 0.5
 material.clearcoatRoughness = 1
-
-gui.add(material, 'clearcoat').min(0).max(1).step(0.0001)
-gui.add(material, 'clearcoatRoughness').min(0).max(1).step(0.0001)
-gui.addColor(material, 'color')
 
 // Sheen
 material.sheen = 1
 material.sheenRoughness = 1
 material.sheenColor.set('#949494')
 
-gui.add(material, 'sheen').min(0).max(1).step(0.0001)
-gui.add(material, 'sheenRoughness').min(0).max(1).step(0.0001)
-gui.addColor(material, 'sheenColor')
-
 // Iridescence
 material.iridescence = 1
 material.iridescenceIOR = 1
 material.iridescenceThickness = [ 100, 360 ]
-
-gui.add(material, 'iridescence').min(0).max(1).step(0.0001)
-gui.add(material, 'iridescenceIOR').min(1).max(2.333).step(0.0001)
-gui.add(material.iridescenceThicknessRange, '0').min(1).max(1000).step(1)
-gui.add(material.iridescenceThicknessRange, '1').min(1).max(1000).step(1)
 
 // Transmission
 material.transmission = 1
 material.ior = 1.8
 material.thickness = 0.5
 
-gui.add(material, 'transmission').min(0).max(1).step(0.0001)
-gui.add(material, 'ior').min(1).max(10).step(0.0001)
-gui.add(material, 'thickness').min(0).max(1).step(0.0001)
-
-gui.add(material, 'metalness').min(0).max(1).step(0.0001)
-gui.add(material, 'roughness').min(0).max(1).step(0.0001)
-
 material.color = new THREE.Color(0x2e46ff)
 
-
-
-
-
-// MeshPhysicalMaterial
+// MeshPhysicalMaterial for hand landmarks
 const landmarkMaterial = new THREE.MeshPhysicalMaterial()
 landmarkMaterial.metalness = 0
 landmarkMaterial.roughness = 0
@@ -439,7 +363,6 @@ landmarkMaterial.clearcoatRoughness = 1
 landmarkMaterial.transmission = 1
 landmarkMaterial.ior = 2.2
 landmarkMaterial.thickness = 0.1
-
 
 /**
  * Objects
@@ -458,22 +381,22 @@ const vibrantColors = [
 
 const notes = [];
 const notePositions = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
-// const notePositions = [-5, -3, -1, 0, 1, 3, 5];
 
 for (let i = 0; i < notePositions.length; i++) {
     let geometry;
-    const randomValue = Math.random();
-    if (randomValue < 0.25) {
+    // set random geometry
+    const rand = Math.random();
+    if (rand < 0.25) {
         geometry = new THREE.SphereGeometry(0.4, 16, 16);
-    } else if (randomValue < 0.5) {
+    } else if (rand < 0.5) {
         geometry = new THREE.CylinderGeometry(0.25, 0.25, 1, 32);
-    } else if (randomValue < 0.75) {
+    } else if (rand < 0.75) {
         geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
     } else {
         geometry = new THREE.ConeGeometry(0.3, 0.6, 32 ); 
     }
 
-    // random color
+    // set random color
     const temp_mat = material.clone();
     const randomColor = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
     temp_mat.color = new THREE.Color(randomColor);
@@ -483,13 +406,14 @@ for (let i = 0; i < notePositions.length; i++) {
         temp_mat
     );
 
-    // ランダムな回転速度を設定
+    // set random rotation speed
     note.rotationSpeed = {
         x: Math.random() * 0.5,
         y: Math.random() * 0.5,
         z: Math.random() * 0.5
     };
 
+    // set random y position
     const ypos = Math.random() * 6 - 3;
 
     note.position.x = notePositions[i];
@@ -561,12 +485,6 @@ gltfLoader.load(
         gltf.scene.position.set(-4, -3.2, 0)
         cat.rotation.set(0.5, 0.67, -0.1) // set param from gui
         // // gltf.scene.rotation.z = Math.PI * 0.5
-
-        // cat.traverse((child) => {
-        //     if (child.isMesh) {
-        //         child.material = material
-        //     }
-        // });
 
         scene.add(cat)
         return cat
@@ -665,18 +583,8 @@ window.addEventListener('resize', () =>
 /**
  * Camera
  */
-// Base camera
-// const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
-
-// Calculate aspect ratio
 const aspect = sizes.width / sizes.height;
-
-// Define the frustum size
 const frustumSize = 6;
-
-// const camera = new THREE.PerspectiveCamera(
-
-// )
 
 // Create an Orthographic Camera
 const camera = new THREE.OrthographicCamera(
@@ -699,137 +607,13 @@ controls.enableDamping = true
  * Audio
  */
 
-const bgmPlayer = new Tone.Player({
-    url: "/sounds/578599__auwenngebleau__slow-rain.m4a",
-    // url: "/sounds/sub-bass-line-by-alien-i-trust-125_bpm-289271.mp3",
-    loop: true,
-}).toDestination();
-// const distortion = new Tone.Distortion(0.4).toDestination();
-// const filter = new Tone.Filter(400, "lowpass").toDestination();
-// const analyser = new Tone.Analyser("fft", 1024);
-const analyser = new Tone.Analyser('waveform', 128);
-Tone.loaded().then(() => {
-    // bgmPlayer.connect(distortion);
-    // bgmPlayer.connect(filter);
-    bgmPlayer.connect(analyser);
-})
 
 let isStart = false
 document.getElementById('start-button').addEventListener('click', async () => {
-    await Tone.start();
-    bgmPlayer.start();
+    await startSound();
     isStart = true
     document.getElementById('start-screen').style.display = 'none';
 });
-
-var piano = SampleLibrary.load({
-    instruments: "violin"
-});
-    
-piano.toMaster();
-
-// //play a middle 'C' for the duration of an 8th note
-// window.addEventListener('click', async() => {
-//     // player.start();
-//     now = Tone.now();
-//     // synth.triggerAttackRelease(80, "8n", now);
-//     // synth.triggerAttackRelease(40, "8n", now + 0.5);
-//     synth.triggerAttackRelease("A4", "8n", now + 1);
-//     synth.triggerAttackRelease("C5", "8n", now + 1.5);
-//     synth.triggerAttackRelease("E5", "8n", now + 2);
-
-//     // openHiHatPart.start(now);
-//     // closedHatPart.start(now);
-// })
-
-function mapRange(value, inMin, inMax, outMin, outMax) {
-    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-}
-
-// const openHiHatPart = new Tone.Part(((time) => {
-//     openHiHat.triggerAttack(time);
-// }), [{ "8n": 2 }, { "8n": 6 }])
-
-// const closedHiHat = new Tone.NoiseSynth({
-//     volume: -10,
-//     envelope: {
-//         attack: 0.01,
-//         decay: 0.15
-//     },
-// }).toDestination();
-
-// Setup a reverb with ToneJS
-const reverb = new Tone.Reverb({
-    decay: 4,
-    wet: 0.2,
-    preDelay: 0.25,
-});
-
-// Load the reverb
-await reverb.generate();
-
-// Create an effect node that creates a feedback delay
-const effect = new Tone.FeedbackDelay("8n", 1 / 3);
-effect.wet.value = 0.2;
-
-function playSound(heights) {
-    const availableNotes = [
-        "C2", "D2", "E2", "F2", "G2", "A2", "B2",
-        "C3", "D3", "E3", "F3", "G3", "A3", "B3",
-        "C4", "D4", "E4", "F4", "G4", "A4", "B4",
-        "C5", "D5", "E5", "F5", "G5", "A5", "B5",
-        "C6", "D6", "E6", "F6", "G6", "A6", "B6"
-      ];
-
-    let ns = []
-    for(let height of heights){
-        const noteIndex = Math.floor(mapRange(height, -3, 3, 0, availableNotes.length - 1));
-        const n = availableNotes[noteIndex];
-        ns.push(n)
-    }
-    
-    // const mappedValue = mapRange(height, -3, 3, 80, 200);
-    // now = Tone.now();
-    // synth.triggerAttackRelease(mappedValue, "8n", now);
-    const velocity = Math.random() * 0.5 + 0.5;
-
-    //create a synth and connect it to the main output (your speakers)
-    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    synth.set({
-        voice0: {
-        oscillator: {
-            type: "triangle4",
-        },
-        volume: -30,
-        envelope: {
-            attack: 0.005,
-            release: 0.05,
-            sustain: 1,
-        },
-        },
-        voice1: {
-        volume: -10,
-        envelope: {
-            attack: 0.005,
-            release: 0.05,
-            sustain: 1,
-        },
-        },
-    });
-    synth.volume.value = -5;
-
-    // const testsynth = new Tone.PolySynth().toDestination();
-    // //play a chord
-    // testsynth.triggerAttackRelease(["C4", "E4", "A4"], 1);
-
-    synth.triggerAttackRelease(ns, "8n", Tone.now(), velocity);
-    // synth.triggerAttackRelease(n, "8n", Date.now, velocity);
-    // // Wire up our nodes:
-    synth.connect(effect);
-    synth.connect(Tone.Master);
-    effect.connect(reverb);
-    reverb.connect(Tone.Master);
-}
 
 /**
  * Renderer
@@ -852,10 +636,7 @@ effectComposer.setSize(sizes.width, sizes.height)
 const renderScene = new RenderPass(scene, camera)
 effectComposer.addPass(renderScene)
 
-// const glitchPass = new GlitchPass()
-// effectComposer.addPass(glitchPass)
 const gtaoPass = new GTAOPass(scene, camera);
-// gtaoPass.output = GTAOPass.OUTPUT.Off;
 effectComposer.addPass(gtaoPass);
 
 const outputPass = new OutputPass()
@@ -876,7 +657,7 @@ const plane = new THREE.Mesh(
 plane.rotation.y = Math.PI; 
 plane.position.z = -1
 plane.receiveShadow = true;
-// scene.add(plane);
+scene.add(plane);
 
 // video plane
 // const videoPlane = new THREE.Mesh(
@@ -890,17 +671,6 @@ plane.receiveShadow = true;
 // scene.add(videoPlane);
 
 /**
- * Mouse
- */
-const mouse = new THREE.Vector2()
-
-window.addEventListener('mousemove', (event) =>
-{
-    mouse.x = event.clientX / sizes.width * 2 - 1
-    mouse.y = - (event.clientY / sizes.height) * 2 + 1
-})
-
-/**
  * Animate
  */
 const clock = new THREE.Clock()
@@ -911,20 +681,16 @@ let currentProgressIntersectsObjects = null
 
 const tick = () =>
 {
-    const values = analyser.getValue();
-    const averageValue = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const scaleValue = mapRange(averageValue, -120, -90, 0.75, 0.25);
+    // const values = analyser.getValue();
+    // const averageValue = values.reduce((sum, value) => sum + value, 0) / values.length;
+    // const scaleValue = mapRange(averageValue, -120, -90, 0.75, 0.25);
 
-    if(cat) {
-        cat.scale.set(scaleValue, scaleValue, scaleValue);
-    }
+    // if(cat) {
+    //     cat.scale.set(scaleValue, scaleValue, scaleValue);
+    // }
 
     const deltaTime = clock.getDelta()
     const elapsedTime = clock.getElapsedTime()
-
-    // // Animate objects
-    // notes[0].position.y = Math.sin(elapsedTime * 0.3) * 1.5
-    // notes[2].position.y = Math.sin(elapsedTime * 1.4) * 1.5
 
     for (const note of notes) {
         note.rotation.x += note.rotationSpeed.x * deltaTime;
@@ -994,22 +760,23 @@ const tick = () =>
         }
     }
 
-    const progressBarPosition = new THREE.Vector3(progressBar.position.x, 10, progressBar.position.z);
+    const progressPosition = new THREE.Vector3(progressBar.position.x, 10, progressBar.position.z);
     const progressBarDirection = new THREE.Vector3(0, -1, 0);
-    progressRaycaster.set(progressBarPosition, progressBarDirection);
-    const progressBarIntersects = progressRaycaster.intersectObjects(objectsToTest);
+    progressRaycaster.set(progressPosition, progressBarDirection);
+    const progressIntersects = progressRaycaster.intersectObjects(objectsToTest);
     
     if(isStart){
-        if(progressBarIntersects.length)
+        console.log(progressIntersects.length)
+        if(progressIntersects.length)
         {
-            for(const intersect of progressBarIntersects){
+            for(const intersect of progressIntersects){
                 intersect.object.scale.set(1.3, 1.3, 1.3)
             }
     
-            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressBarIntersects.length)
+            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressIntersects.length)
             {
                 const heights = []
-                for (const intersect of progressBarIntersects) {
+                for (const intersect of progressIntersects) {
                     // heights.push(intersect.object.position.y);
                     if(currentProgressIntersectsObjects === null){
                         heights.push(intersect.object.position.y);
@@ -1025,7 +792,7 @@ const tick = () =>
                 console.log(heights.length)
                 playSound(heights);
             }
-            const tests = progressBarIntersects.map(inter => inter.object)
+            const tests = progressIntersects.map(inter => inter.object)
             currentProgressIntersectsObjects = tests
         } else {
             if(currentProgressIntersectsObjects)
