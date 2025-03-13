@@ -7,7 +7,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
-import { detectFrame } from './hand-detection.js'
+import { detectFrame ,video } from './hand-detection.js'
 import { startSound, playSound, analyser, playSE, switchBgm } from './tone-sound.js'
 
 const HANDS_NUM = 4;
@@ -460,6 +460,19 @@ function processResults(results) {
         }
     }
 }
+
+const vidTexture = new THREE.VideoTexture( video );
+
+// video plane
+const videoPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 1.5),
+    new THREE.MeshBasicMaterial({ map: vidTexture })
+)
+// videoPlane.rotation.y = Math.PI;
+videoPlane.position.x = 2
+videoPlane.position.y = -2
+videoPlane.position.z = 1
+// scene.add(videoPlane);
 
 window.addEventListener('keypress', (key) => {
     if(key.key === 's'){

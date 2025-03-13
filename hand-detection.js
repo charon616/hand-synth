@@ -1,6 +1,6 @@
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
-const video = document.getElementById('video')
+export const video = document.getElementById('video')
 
 // Get user media
 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
