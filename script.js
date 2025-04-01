@@ -359,6 +359,12 @@ function ndcToWorld(ndcX, ndcY) {
     return new THREE.Vector3(worldX, worldY, 0); // z=0
 }
 
+function mapPositionXToNDC(positionX) {
+    const left = camera.left;
+    const right = camera.right;
+    return (positionX - left) / (right - left) * 2 - 1;
+}
+
 // Create a sphere for each hand landmark
 function createLandmarkSphere(size) {
     const geometry = new THREE.SphereGeometry(size || 0.1, 8, 8);
@@ -474,12 +480,22 @@ videoPlane.position.y = -2
 videoPlane.position.z = 1
 // scene.add(videoPlane);
 
+let currentInstrumentIndex = 0;
+// const instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
+const instruments = ['default', 'default', 'default', 'default'];
+
+function switchInstrument() {
+    currentInstrumentIndex = (currentInstrumentIndex + 1) % instruments.length;
+}
 window.addEventListener('keypress', (key) => {
     if(key.key === 's'){
         switchBgm();
         switchTexture();
+        switchInstrument(); 
     }
   });
+
+
 
 const tick = () =>
 {
@@ -593,16 +609,29 @@ const tick = () =>
                 const heights = []
                 for (const intersect of progressIntersects) {
                     if(currentProgressIntersectsObjects === null){
-                        heights.push(intersect.object.position.y);
+                        const ndcX = mapPositionXToNDC(intersect.object.position.x);
+                        heights.push(
+                            {
+                            'note':intersect.object.position.y,
+                            'pos': ndcX
+                        })
                     } else {
                         for (let k of currentProgressIntersectsObjects){
                             if(k.uuid !== intersect.object.uuid){
-                                heights.push(intersect.object.position.y)
+                                const ndcX = mapPositionXToNDC(intersect.object.position.x);
+                                heights.push(
+                                    {
+                                    'note':intersect.object.position.y,
+                                    'pos': ndcX
+                                }
+                                );
                             }
                         }
                     }
                 }
-                playSound(heights);
+                if(heights.length > 0){
+                    playSound(heights, instruments[currentInstrumentIndex]);
+                }
             }
             const temp = progressIntersects.map(inter => inter.object)
             currentProgressIntersectsObjects = temp
