@@ -10,7 +10,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { detectFrame ,video } from './hand-detection.js'
 import { startSound, playSound, analyser, playSE, switchBgm } from './tone-sound.js'
 
-const HANDS_NUM = 4;
+const HANDS_NUM = 4; // maximum number of hands
 
 /**
  * Base
@@ -378,13 +378,15 @@ function processResults(results) {
     // Clear previous hand ray origins
     handRayOrigins = [];
 
+    console.log(results.landmarks)
+
     // Create or update spheres based on the number of landmarks
     if (results.landmarks) {
-        let sphereIndex = 0;
         for (let i = 0; i < results.landmarks.length; i++) {
-            const landmarks = results.landmarks[i];
+            const landmarks = results.landmarks[i]; // landmarks for each hand
+            let sphereIndex = 0;
             for (let j = 0; j < landmarks.length; j++) {
-                const landmark = landmarks[j];
+                const landmark = landmarks[j]; // target landmark
                 let sphere;
                 if (sphereIndex < landmarkSpheres[i].length) {
                     // Update existing sphere
@@ -445,13 +447,13 @@ function processResults(results) {
 
         }
         // Remove any extra spheres
-        for(let i = 0; i < HANDS_NUM; i++) {
-            while (sphereIndex < landmarkSpheres[i].length) {
-                const sphere = landmarkSpheres[i].pop();
-                scene.remove(sphere);
-                handRayOrigins = [];
-            }
-        }
+        // for(let i = 0; i < HANDS_NUM; i++) {
+        //     while (sphereIndex < landmarkSpheres[i].length) {
+        //         const sphere = landmarkSpheres[i].pop();
+        //         scene.remove(sphere);
+        //         handRayOrigins = [];
+        //     }
+        // }
     } else {
         // No landmarks detected, remove all spheres
         for(let i = 0; i < HANDS_NUM; i++) {
