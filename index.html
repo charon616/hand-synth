@@ -5,16 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Animations</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+    </style>
 </head>
 <body>
     <div id="start-screen">
+        <h1>
+            <picture>
+              <source srcset="/guide/title.webp" type="image/webp">
+              <img src="/guide/title.png" width="350" alt="Hand Synth on a Rainy Day"/>
+            </picture>
+        </h1>
+        <div id="instructions">
+            <p class="instructions-title">How to enjoy this site</p>
+
+            <div class="horizontal-scroll-wrapper">
+                <div>
+                    <picture>
+                        <source srcset="/guide/description1.webp" type="image/webp">
+                        <img src="/guide/description1.png" width="350" alt="description1"/>
+                    </picture>
+                </div>
+                <div>
+                    <picture>
+                        <source srcset="/guide/description2.webp" type="image/webp">
+                        <img src="/guide/description2.png" width="350" alt="description2"/>
+                    </picture>
+                </div>
+                <div>
+                    <picture>
+                        <source srcset="/guide/description3.webp" type="image/webp">
+                        <img src="/guide/description3.png" width="350" alt="description3"/>
+                    </picture>
+                </div>
+                <div>
+                    <picture>
+                        <source srcset="/guide/description4.webp" type="image/webp">
+                        <img src="/guide/description4.png" width="350" alt="description4"/>
+                    </picture>
+                </div>
+            </div>
+        </div>
         <button id="start-button">START</button>
     </div>
+    <button id="mute-toggle" class="mute-on">
+      <img id="mute-icon" src="/guide/speaker-high.svg" alt="mute"/>
+      <span>ON</span>
+    </button>
     <video id="video" style="display:none" autoplay playsinline></video>
     <canvas class="webgl"></canvas>
     <script src="utils.js"></script>
     <script type="module" src="/hand-detection.js"></script>
     <script type="module" src="/tone-sound.js"></script>
     <script type="module" src="/script.js"></script>
+    <script>
+    // convert scroll wheel to horizontal scroll
+    const hScroll = document.querySelector('.horizontal-scroll-wrapper');
+    if (hScroll) {
+      hScroll.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        horizontal.scrollLeft += e.deltaY;
+      }, { passive: false });
+    }
+    </script>
 </body>
 </html>

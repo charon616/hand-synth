@@ -1,4 +1,8 @@
 import * as THREE from 'three'
+import gsap from 'gsap';
+import * as Tone from 'tone';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -6,11 +10,17 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 import { detectFrame ,video } from './hand-detection.js'
-import { startSound, playSound, analyser, playSE, switchBgm } from './tone-sound.js'
+import { startSound, playSound, analyser, playRandomMeow, switchBgm } from './tone-sound.js'
 
 const HANDS_NUM = 4; // maximum number of hands
+
+// Duration threshold (in seconds) for touching the disk before switching
+const DISK_TOUCH_DURATION_THRESHOLD = 0.5;
+// Store touch start times for each hand-disk pair
+let diskTouchTimers = Array(HANDS_NUM).fill(null).map(() => Array(3).fill(null));
 
 /**
  * Base
@@ -45,13 +55,6 @@ directionalLight.shadow.mapSize.height = 1024;
 directionalLight.shadow.intensity = 0.5
 scene.add(directionalLight)
 
-// Point light
-const pointLight = new THREE.PointLight(0xffffff, 30)
-pointLight.position.x = 2
-pointLight.position.y = 3
-pointLight.position.z = 4
-scene.add(pointLight)
-
 /**
  * Sizes
  */
@@ -63,11 +66,11 @@ const sizes = {
 window.addEventListener('resize', () =>
 {
     // Update sizes
-    sizes.width = window.innerWidth
-    sizes.height = window.innerHeight
+    sizes.width = window.innerWidth;
+    sizes.height = window.innerHeight;
 
-    // Update camera
-    camera.aspect = sizes.width / sizes.height
+    // Recalculate aspect and update camera
+    const aspect = sizes.width / sizes.height;
     camera.left = frustumSize * aspect / -2;
     camera.right = frustumSize * aspect / 2;
     camera.top = frustumSize / 2;
@@ -75,9 +78,9 @@ window.addEventListener('resize', () =>
     camera.updateProjectionMatrix();
 
     // Update renderer
-    renderer.setSize(sizes.width, sizes.height)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-})
+    renderer.setSize(sizes.width, sizes.height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+});
 
 /**
  * Camera
@@ -93,8 +96,8 @@ const camera = new THREE.OrthographicCamera( // Create an Orthographic Camera
     0.1,                       // near
     100                        // far
 );
-camera.position.z = 3
-scene.add(camera)
+camera.position.z = 3;
+scene.add(camera);
 
 /**
  * Audio
@@ -117,6 +120,19 @@ renderer.shadowMap.enabled = true // Enable shadow
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
+/**
+ * Controls
+ */
+// --- OrbitControls for debug ---
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = true;
+controls.enableZoom = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = false;
+controls.minZoom = 0.5;
+controls.maxZoom = 2.5;
 
 /**
  * Material
@@ -207,8 +223,7 @@ function switchTexture() {
     currentTextureIndex = (currentTextureIndex + 1) % textures.length;
     plane.material.map = textures[currentTextureIndex];
     plane.material.needsUpdate = true;
-  }
-  
+}
 
 /**
  * Objects
@@ -224,23 +239,24 @@ const vibrantColors = [
     0x48c9b0, // green
     0xf39c12, // orange
     0x85929e, // gray
-    0xd580ff // purple
+    0xd580ff, // purple
+    0x00b894, // teal
 ];
 const notes = [];
-const notePositions = [-5, -4.5, -3, -2.5, -2, -1, 0, 0.5, 1, 2.5, 3, 4, 4.5, 5]; // x positions
+const notePositions = [-5, -3, -2.5, -1, 0, 0.5, 1, 3, 4, 5]; // x positions
 
 for (let i = 0; i < notePositions.length; i++) {
     let geometry;
     // Set random geometry
     const rand = Math.random();
     if (rand < 0.25) {
-        geometry = new THREE.SphereGeometry(0.4, 16, 16);
+        geometry = new THREE.SphereGeometry(0.45, 32, 32);
     } else if (rand < 0.5) {
-        geometry = new THREE.CylinderGeometry(0.25, 0.25, 1, 32);
+        geometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 32);
     } else if (rand < 0.75) {
-        geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        geometry = new RoundedBoxGeometry( .85, .85, .85, 7, 0.15 );
     } else {
-        geometry = new THREE.ConeGeometry(0.3, 0.6, 32 ); 
+        geometry = new THREE.ConeGeometry(0.5, 0.9, 32 ); 
     }
 
     // Set random color
@@ -255,9 +271,9 @@ for (let i = 0; i < notePositions.length; i++) {
 
     // Set random rotation speed
     note.rotationSpeed = {
-        x: Math.random() * 0.5,
-        y: Math.random() * 0.5,
-        z: Math.random() * 0.5
+        x: Math.random() * 0.3,
+        y: Math.random() * 0.3,
+        z: Math.random() * 0.3
     };
 
     // set random y position
@@ -281,15 +297,28 @@ plane.position.z = -1
 plane.receiveShadow = true;
 scene.add(plane);
 
-// Progress bar
-const lineGeometry = new THREE.CylinderGeometry(0.05, 0.05, 10, 16);
-const lineMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ffff,
-    transparent: true,
-    opacity: 0.8
+// Progress bar using a metallic cylinder mesh for a guitar string look
+const progressBarRadius = 0.045; // thickness of the string
+const progressBarLength = 10; // length in world units
+const progressBarGeometry = new THREE.CylinderGeometry(progressBarRadius, progressBarRadius, progressBarLength, 32);
+const progressBarMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xc0c0c0, // silver
+    metalness: 1.0,
+    roughness: 0.15,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0.2,
+    reflectivity: 1.0,
+    sheen: 1.0,
+    sheenColor: new THREE.Color(0xffffff),
+    sheenRoughness: 0.2,
+    transmission: 0.0,
+    ior: 2.0,
 });
-const progressBar = new THREE.Mesh(lineGeometry, lineMaterial);
-progressBar.position.x = -5
+const progressBar = new THREE.Mesh(progressBarGeometry, progressBarMaterial);
+progressBar.castShadow = false;
+progressBar.receiveShadow = false;
+progressBar.position.set(0, 0, 0.11); // Slightly above the plane
+progressBar.rotation.z = 0; // Set to vertical orientation
 scene.add(progressBar);
 
 /**
@@ -299,13 +328,31 @@ const gltfLoader = new GLTFLoader()
 
 let cat = null; // normal
 let cat2 = null; // material changed
+let playerModel = null;
+let playerMixer = null;
+let diskRotationEnabled = true; // Animation toggle
+let playerActions = [];
+let currentPlayerActionIndex = 0;
+let diskModels = [];
+let currentDiskIndex = 0;
+
+let diskTransitioning = false;
+
+// Load cat models
 gltfLoader.load(
     '/models/cat.glb',
     (gltf) =>
     {
         cat = gltf.scene
         cat.scale.set(0.5, 0.5, 0.5)
-        gltf.scene.position.set(-4, -3.2, 0)
+
+        // set position to the bottom-left
+        const offsetX = 0.75; // Adjust as needed
+        const offsetY = 0.1; // Adjust as needed
+        const x = camera.left + offsetX;
+        const y = camera.bottom - offsetY;
+
+        gltf.scene.position.set(x, y, 0)
         cat.rotation.set(0.5, 0.67, -0.1) 
 
         cat.traverse((child) => {
@@ -326,7 +373,129 @@ gltfLoader.load(
         return cat
     }
 )
+// Load player_anim.glb (with Start/Stop animations)
+gltfLoader.load(
+    '/models/player_anim.glb',
+    (gltf) => {
+        playerModel = gltf.scene;
+        playerModel.scale.set(1.5, 1.5, 1.5);
 
+        // set position to the bottom-right
+        const offsetX = 1.15; // Adjust as needed
+        const offsetY = -0.75; // Adjust as needed
+        const x = camera.right - offsetX;
+        const y = camera.bottom - offsetY;
+
+        playerModel.position.set(x, y, -3)
+        playerModel.rotation.set(Math.PI/2, 0, 0);
+
+        // Animation setup for Start/Stop
+        if (gltf.animations && gltf.animations.length > 0) {
+            playerMixer = new THREE.AnimationMixer(playerModel);
+            playerActions = {};
+            gltf.animations.forEach(clip => {
+                playerActions[clip.name] = playerMixer.clipAction(clip);
+                playerActions[clip.name].loop = THREE.LoopOnce;
+                playerActions[clip.name].clampWhenFinished = true;
+            });
+        }
+        scene.add(playerModel);
+    }
+);
+// Load disk1.glb
+gltfLoader.load(
+    '/models/disk1.glb',
+    (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+
+        // set position to the bottom-right
+        const offsetX = 1.15; // Adjust as needed
+        const offsetY = -0.75; // Adjust as needed
+        const x = camera.right - offsetX;
+        const y = camera.bottom - offsetY;
+        model.position.set(x, y, -3)
+        model.rotation.set(Math.PI/2, 0, 0);
+        model.visible = true;
+        diskModels[0] = model;
+        scene.add(model);
+        updateDiskPositions();
+    }
+);
+// Load disk2.glb
+gltfLoader.load(
+    '/models/disk2.glb',
+    (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+
+        // set position to the bottom-right
+        const offsetX = 1.15; // Adjust as needed
+        const offsetY = -0.75; // Adjust as needed
+        const x = camera.right - offsetX;
+        const y = camera.bottom - offsetY; // stack above if needed
+        model.position.set(x, y, -3)
+        model.rotation.set(Math.PI/2, 0, 0);
+        model.visible = false;
+        diskModels[1] = model;
+        scene.add(model);
+        updateDiskPositions();
+    }
+);
+// Load disk3.glb
+gltfLoader.load(
+    '/models/disk3.glb',
+    (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+
+        // set position to the bottom-right
+        const offsetX = 1.15; // Adjust as needed
+        const offsetY = -0.75; // Adjust as needed
+        const x = camera.right - offsetX;
+        const y = camera.bottom - offsetY; // stack above if needed
+        model.position.set(x, y, -3)
+        model.rotation.set(Math.PI/2, 0, 0);
+        model.visible = false;
+        diskModels[2] = model;
+        scene.add(model);
+        updateDiskPositions();
+    }
+);
+
+// Helper: set disk positions based on target
+function updateDiskPositions(transition = false, fromIndex = null, toIndex = null) {
+    const mainY = camera.bottom + 0.75; // main position (visible)
+    const standbyY = camera.bottom - 3; // below window
+    for (let i = 0; i < diskModels.length; i++) {
+        if (diskModels[i]) {
+            diskModels[i].visible = true;
+            if (transition && (i === fromIndex || i === toIndex)) {
+                // handled by GSAP
+                continue;
+            }
+            diskModels[i].position.y = (i === currentDiskIndex) ? mainY : standbyY;
+        }
+    }
+}
+
+// --- Add event to toggle disk rotation (for debug, press 'd') ---
+window.addEventListener('keypress', (e) => {
+    if (e.key === 'p') {
+        if (playerActions && playerActions.length > 0) {
+            // Stop all actions first
+            playerActions.forEach(action => action.stop());
+            // Play all actions simultaneously
+            playerActions.forEach((action, idx) => {
+                console.log(`[DEBUG] 'p' key pressed: playing animation index ${idx}`);
+                action.reset();
+                action.play();
+            });
+        } else {
+            console.warn('[DEBUG] playerActions are not ready when pressing "p".');
+        }
+    }
+});
 
 /**
  * Raycaster
@@ -340,14 +509,18 @@ const progressRaycaster = new THREE.Raycaster();
  */
 const clock = new THREE.Clock()
 
-let currentIntersect = null // Current intersected object with the hand
+let currentIntersect = null // Current intersected objects with the hand
 let currentModelIntersect = null // Current intersected object with the model
 let modelIntersects = null // Current intersected object for the model
 let currentProgressIntersectsObjects = null // Current intersected objects with the progress bar
 
-let landmarkSpheres = new Array(HANDS_NUM).fill([]); // Array of spheres for each hand landmark
+let landmarkSpheres = new Array(HANDS_NUM).fill().map(() => []);
 let handRayOrigins = []; // Array of ray origins for each hand
 let isPinching = new Array(HANDS_NUM).fill(false) // Flag to indicate if the thumb and index finger or middle finger are pinching
+let grabbedNotes = new Array(HANDS_NUM).fill(null); // Array to store grabbed notes for each hand
+
+// 直前の手の位置を保存する配列
+let prevHandRayOrigins = [];
 
 // Convert ndc coordinates to world coordinates
 function ndcToWorld(ndcX, ndcY) {
@@ -378,10 +551,8 @@ function processResults(results) {
     // Clear previous hand ray origins
     handRayOrigins = [];
 
-    console.log(results.landmarks)
-
     // Create or update spheres based on the number of landmarks
-    if (results.landmarks) {
+    if (results.landmarks && results.landmarks.length > 0) {
         for (let i = 0; i < results.landmarks.length; i++) {
             const landmarks = results.landmarks[i]; // landmarks for each hand
             let sphereIndex = 0;
@@ -415,7 +586,10 @@ function processResults(results) {
             const middleFinger = landmarks[12];
   
             // mirror x-axis
-            handRayOrigins.push(new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z));
+            // smoothingをやめて生の値をそのまま使う
+            const rawOrigin = new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z);
+            handRayOrigins.push(rawOrigin);
+            prevHandRayOrigins[i] = rawOrigin;
   
             const distanceToIndex = Math.sqrt(
                 Math.pow(thumb.x - indexFinger.x, 2) +
@@ -426,34 +600,37 @@ function processResults(results) {
             const distanceToMiddle = Math.sqrt(
                 Math.pow(thumb.x - middleFinger.x, 2) +
                 Math.pow(thumb.y - middleFinger.y, 2) +
-                Math.pow(thumb.z - middleFinger.z, 2)
+                Math.pow(thumb.z - indexFinger.z, 2)
             );
   
             const threshold = 0.1; // Set your threshold distance here
   
-            if (distanceToIndex < threshold || distanceToMiddle < threshold) {
+            if (distanceToIndex < threshold) {
                 // Change color of thumb and index finger spheres if distance is below threshold
                 landmarkSpheres[i][4].material.color.set(0x2e46ff); // Change thumb color
                 landmarkSpheres[i][8].material.color.set(0x2e46ff); // Change index finger color
-                landmarkSpheres[i][12].material.color.set(0x2e46ff); // Change middle finger color
                 isPinching[i] = true;
             } else {
                 // Reset color of thumb and index finger spheres
                 landmarkSpheres[i][4].material.color.set(0xffffff); // Change thumb color
                 landmarkSpheres[i][8].material.color.set(0xffffff); // Change index finger color
-                landmarkSpheres[i][12].material.color.set(0xffffff); // Change middle finger color
                 isPinching[i] = false;
             }
 
+            // Remove any extra spheres
+            while (sphereIndex < landmarkSpheres[i].length) {
+                const sphere = landmarkSpheres[i].pop();
+                scene.remove(sphere);
+                // handRayOrigins = [];
+            }
         }
-        // Remove any extra spheres
-        // for(let i = 0; i < HANDS_NUM; i++) {
-        //     while (sphereIndex < landmarkSpheres[i].length) {
-        //         const sphere = landmarkSpheres[i].pop();
-        //         scene.remove(sphere);
-        //         handRayOrigins = [];
-        //     }
-        // }
+        // --- 追加: 検出されなかった手のsphereも消す ---
+        for (let i = results.landmarks.length; i < HANDS_NUM; i++) {
+            while (landmarkSpheres[i].length > 0) {
+                const sphere = landmarkSpheres[i].pop();
+                scene.remove(sphere);
+            }
+        }
     } else {
         // No landmarks detected, remove all spheres
         for(let i = 0; i < HANDS_NUM; i++) {
@@ -483,24 +660,19 @@ videoPlane.position.z = 1
 // scene.add(videoPlane);
 
 let currentInstrumentIndex = 0;
-// const instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
-const instruments = ['default', 'default', 'default', 'default'];
+const instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
+// const instruments = ['default', 'default', 'default', 'default'];
 
 function switchInstrument() {
     currentInstrumentIndex = (currentInstrumentIndex + 1) % instruments.length;
 }
-window.addEventListener('keypress', (key) => {
-    if(key.key === 's'){
-        switchBgm();
-        switchTexture();
-        switchInstrument(); 
-    }
-  });
 
-
-
-const tick = () =>
+const tickMobile = () =>
 {
+    window.requestAnimationFrame(tickMobile);
+}
+
+const tickDesktop = () => {
     // Change cat scale based on audio input
     const values = analyser.getValue();
     const averageValue = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -513,18 +685,28 @@ const tick = () =>
 
     // Animation
     // Rotate notes
-    const deltaTime = clock.getDelta()
+    const deltaTime = clock.getDelta();
     for (const note of notes) {
         note.rotation.x += note.rotationSpeed.x * deltaTime;
         note.rotation.y += note.rotationSpeed.y * deltaTime;
         note.rotation.z += note.rotationSpeed.z * deltaTime;
     }
 
+    // Disk rotation animation
+    if (diskModels.length > 0 && diskRotationEnabled) {
+        const disk = diskModels[currentDiskIndex];
+        if (disk) disk.rotation.y += 0.03;
+    }
+
+    if (playerMixer) {
+        playerMixer.update(deltaTime); // Update player model animation
+    }
+
     // Cast rays
-    const objectsToTest = notes
-    if(handRayOrigins.length > 0) {
-        let intersects = []
-        for(let i=0; i<handRayOrigins.length; i++) {
+    const objectsToTest = notes;
+    if (handRayOrigins.length > 0) {
+        let intersects = [];
+        for (let i = 0; i < handRayOrigins.length; i++) {
             const rayOrigin = handRayOrigins[i];
             raycaster[i].setFromCamera(rayOrigin, camera);
             let tempIntersects = raycaster[i].intersectObjects(objectsToTest);
@@ -533,63 +715,135 @@ const tick = () =>
             }
             intersects = intersects.concat(tempIntersects);
 
-            if(cat){
-                modelIntersects = raycaster[i].intersectObject(cat, true)
-        
-                if(modelIntersects.length)
-                {
-                    // change cat material
-                    cat2.visible = true
-                    cat.visible = false
-
-                    // Play sound if intersect with model
-                    if(currentModelIntersect === null){
-                        playSE()
+            // Cat interaction (existing)
+            if (cat) {
+                modelIntersects = raycaster[i].intersectObject(cat, true);
+                if (modelIntersects.length) {
+                    cat2.visible = true;
+                    cat.visible = false;
+                    if (currentModelIntersect === null) {
+                        playRandomMeow();
                     }
-
-                    currentModelIntersect = modelIntersects[0]
+                    currentModelIntersect = modelIntersects[0];
                 } else {
-                    // reset to default
-                    cat.visible = true 
-                    cat2.visible = false
-                    currentModelIntersect = null
+                    cat.visible = true;
+                    cat2.visible = false;
+                    currentModelIntersect = null;
+                }
+            }
+            // --- New: Player and Disk interaction ---
+            if (diskModels.length > 0) {
+                for (let d = 0; d < diskModels.length; d++) {
+                    const disk = diskModels[d];
+                    if (disk) {
+                        const diskIntersects = raycaster[i].intersectObject(disk, true);
+                        if (diskIntersects.length && !diskTransitioning) {
+                            // Start or update timer
+                            if (!diskTouchTimers[i][d]) {
+                                diskTouchTimers[i][d] = performance.now();
+                            }
+                            const elapsed = (performance.now() - diskTouchTimers[i][d]) / 1000;
+                            if (elapsed >= DISK_TOUCH_DURATION_THRESHOLD) {
+                                // Reset all timers for this hand
+                                diskTouchTimers[i] = Array(3).fill(null);
+                                // Animate current disk down, next disk up
+                                const fromIndex = currentDiskIndex;
+                                const toIndex = (currentDiskIndex + 1) % diskModels.length;
+                                diskTransitioning = true;
+                                const mainY = camera.bottom - 0.75;
+                                const standbyY = camera.bottom - 5;
+                                // Play Stop animation
+                                if (playerActions && playerActions["Stop"]) {
+                                    playerActions["Stop"].reset().play();
+                                }
+                                gsap.to(diskModels[fromIndex].position, {
+                                    y: standbyY,
+                                    duration: 0.5,
+                                    ease: 'power2.inOut',
+                                    onComplete: () => {
+                                        // Play Start animation
+                                        if (playerActions && playerActions["Start"]) {
+                                            playerActions["Start"].reset().play();
+                                        }
+                                        // Switch BGM when disk switches
+                                        switchBgm();
+                                        // Switch background image when disk switches
+                                        switchTexture();
+                                        // Switch instrument when disk switches
+                                        switchInstrument();
+                                        diskModels[toIndex].position.y = standbyY;
+                                        gsap.to(diskModels[toIndex].position, {
+                                            y: mainY,
+                                            duration: 0.5,
+                                            ease: 'power2.inOut',
+                                            onComplete: () => {
+                                                currentDiskIndex = toIndex;
+                                                updateDiskPositions();
+                                                diskTransitioning = false;
+                                            }
+                                        });
+                                    }
+                                });
+                                // Optionally, play animation or sound here
+                                break;
+                            }
+                        } else {
+                            // Reset timer if not intersecting
+                            diskTouchTimers[i][d] = null;
+                        }
+                    }
                 }
             }
         }
-    
+
         // reset to default
-        for(const object of objectsToTest)
-        {
-            object.scale.set(1, 1, 1)
-        }
-    
-        // change scale if intersect
-        for(const intersect of intersects)
-        {
-            intersect.object.scale.set(1.3, 1.3, 1.3)
-        }
-    
-        if(intersects.length)
-        {
-            currentIntersect = intersects[0]
-        } else {
-            currentIntersect = null
+        for (const object of objectsToTest) {
+            object.scale.set(1, 1, 1);
         }
 
-        // Move object if pinching
-        if (isPinching[0] && currentIntersect) {
-            // Convert screen coordinates to world coordinates
-            const intersection = new THREE.Vector3();
-            raycaster[0].ray.intersectPlane(basePlane, intersection); // move objects on xy plane
-            currentIntersect.object.position.copy(intersection);
+        // change scale if intersect
+        for (const intersect of intersects) {
+            intersect.object.scale.set(1.3, 1.3, 1.3);
+        }
+
+        if (intersects.length) {
+            currentIntersect = intersects; // Store all intersects
+        } else {
+            currentIntersect = null;
+        }
+
+        // Move objects if pinching
+        for (let i = 0; i < handRayOrigins.length; i++) {
+            if (isPinching[i]) {
+                // まだ掴んでいない場合のみ、最も近いnoteをセット
+                if (!grabbedNotes[i]) {
+                    raycaster[i].setFromCamera(handRayOrigins[i], camera);
+                    const intersects = raycaster[i].intersectObjects(objectsToTest);
+                    if (intersects.length > 0) {
+                        grabbedNotes[i] = intersects[0].object;
+                    }
+                }
+                // 掴んでいるnoteがあれば移動
+                if (grabbedNotes[i]) {
+                    const intersection = new THREE.Vector3();
+                    raycaster[i].ray.intersectPlane(basePlane, intersection);
+                    if (!grabbedNotes[i].intersections) {
+                        grabbedNotes[i].intersections = new Array(HANDS_NUM).fill(null);
+                    }
+                    grabbedNotes[i].intersections[i] = intersection.clone();
+                    grabbedNotes[i].position.copy(grabbedNotes[i].intersections[i]);
+                }
+            } else {
+                // ピンチ解除時は掴みをリセット
+                grabbedNotes[i] = null;
+            }
         }
     }
 
     // Move Progress bar 
-    progressBar.position.x += deltaTime * 1.75
-    if(progressBar.position.x > 7)
-    {
-        progressBar.position.x = -7
+    progressBar.position.x += deltaTime * 1.5;
+    if(progressBar.position.x > 7) {
+        progressBar.position.x = -7;
     }
 
     // Progress bar raycast
@@ -599,34 +853,28 @@ const tick = () =>
     const progressIntersects = progressRaycaster.intersectObjects(objectsToTest);
     
     if(isStart){
-        if(progressIntersects.length)
-        {
+        if(progressIntersects.length) {
             for(const intersect of progressIntersects){
-                intersect.object.scale.set(1.3, 1.3, 1.3)
+                intersect.object.scale.set(1.3, 1.3, 1.3);
             }
-    
             // Play sound if progress intersects with objects
-            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressIntersects.length)
-            {
-                const heights = []
+            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressIntersects.length) {
+                const heights = [];
                 for (const intersect of progressIntersects) {
                     if(currentProgressIntersectsObjects === null){
                         const ndcX = mapPositionXToNDC(intersect.object.position.x);
-                        heights.push(
-                            {
+                        heights.push({
                             'note':intersect.object.position.y,
                             'pos': ndcX
-                        })
+                        });
                     } else {
                         for (let k of currentProgressIntersectsObjects){
                             if(k.uuid !== intersect.object.uuid){
                                 const ndcX = mapPositionXToNDC(intersect.object.position.x);
-                                heights.push(
-                                    {
+                                heights.push({
                                     'note':intersect.object.position.y,
                                     'pos': ndcX
-                                }
-                                );
+                                });
                             }
                         }
                     }
@@ -635,28 +883,100 @@ const tick = () =>
                     playSound(heights, instruments[currentInstrumentIndex]);
                 }
             }
-            const temp = progressIntersects.map(inter => inter.object)
-            currentProgressIntersectsObjects = temp
+            const temp = progressIntersects.map(inter => inter.object);
+            currentProgressIntersectsObjects = temp;
         } else {
-            if(currentProgressIntersectsObjects)
-            {
-                for(const object of objectsToTest)
-                    {
-                        object.scale.set(1, 1, 1)
-                    }
+            if(currentProgressIntersectsObjects) {
+                for(const object of objectsToTest) {
+                    object.scale.set(1, 1, 1);
+                }
             }
-            currentProgressIntersectsObjects = null
+            currentProgressIntersectsObjects = null;
         }
     }
 
     // Update hand landmarks
-    const result = detectFrame()
-    if(result){
-        processResults(result);
+    if (isStart) {
+        const result = detectFrame();
+        if(result){
+            processResults(result);
+        }
     }
     
-    effectComposer.render() // Render with effects
-    window.requestAnimationFrame(tick) // Call tick again on the next frame
+    updateMemoryDisplay();
+    effectComposer.render(); // Render with effects
+    window.requestAnimationFrame(tickDesktop); // Call tickDesktop again on the next frame
+}
+
+// 横スクロールをScrollTriggerで制御
+window.addEventListener('DOMContentLoaded', () => {
+  const horizontal = document.querySelector('.horizontal-scroll');
+  if (horizontal) {
+    gsap.to(horizontal, {
+      x: () => -(horizontal.scrollWidth - horizontal.clientWidth),
+      ease: "none",
+      scrollTrigger: {
+        trigger: horizontal,
+        start: "top top",
+        end: () => "+=" + (horizontal.scrollWidth - horizontal.clientWidth),
+        scrub: true,
+        pin: true,
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        horizontal: false
+      }
+    });
+  }
+});
+
+// ミュートボタン制御
+const muteBtn = document.getElementById('mute-toggle');
+const muteIcon = document.getElementById('mute-icon');
+let isMuted = false;
+if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+        isMuted = !isMuted;
+        Tone.Destination.mute = isMuted;
+        muteBtn.className = isMuted ? 'mute-off' : 'mute-on';
+        muteIcon.src = isMuted ? '/guide/speaker-slash.svg' : '/guide/speaker-high.svg';
+        muteBtn.querySelector('span').textContent = isMuted ? 'OFF' : 'ON';
+    });
+}
+
+// メモリ量表示用のDOMを追加
+const memoryDiv = document.createElement('div');
+memoryDiv.style.position = 'fixed';
+memoryDiv.style.right = '10px';
+memoryDiv.style.bottom = '10px';
+memoryDiv.style.background = 'rgba(0,0,0,0.7)';
+memoryDiv.style.color = '#fff';
+memoryDiv.style.fontSize = '14px';
+memoryDiv.style.padding = '6px 12px';
+memoryDiv.style.borderRadius = '8px';
+memoryDiv.style.zIndex = '9999';
+memoryDiv.innerText = 'Memory: --';
+document.body.appendChild(memoryDiv);
+
+function updateMemoryDisplay() {
+  if (window.performance && window.performance.memory) {
+    const used = window.performance.memory.usedJSHeapSize / 1024 / 1024;
+    const total = window.performance.memory.totalJSHeapSize / 1024 / 1024;
+    memoryDiv.innerText = `Memory: ${used.toFixed(1)}MB / ${total.toFixed(1)}MB`;
+  } else {
+    memoryDiv.innerText = 'Memory: N/A';
+  }
+}
+
+function isMobile() {
+    return window.innerWidth < 700 || /iPhone|Android.+Mobile/.test(navigator.userAgent);
+}
+
+function tick() {
+    if (isMobile()) {
+        tickMobile();
+    } else {
+        tickDesktop();
+    }
 }
 
 tick()

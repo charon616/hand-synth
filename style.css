@@ -8,6 +8,7 @@ html,
 body
 {
     overflow: hidden;
+    font-family: 'Montserrat', 'Arial', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .webgl
@@ -22,30 +23,89 @@ body
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(128, 128, 128, 0.1);
-    backdrop-filter: blur(8px);
+    width: 100vw;
+    height: 100vh;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 10;
+    backdrop-filter: blur(8px);
+    z-index: 10000;
 }
 
 #start-button {
     padding: 20px 40px;
     font-size: 2rem;
+    font-weight: bold;
     letter-spacing: .1rem;
-    color: white;
+    color: #999393;
     border: 4px solid white;
-    background: rgba(255, 255, 255, 0.3);
+    background: white;
     backdrop-filter: blur(24px);
-    border-radius: 2rem;
     cursor: pointer;
-    transition: all 0.3s ease-out;
+    transition: all 0.2s ease-out;
 }
 
 #start-button:hover {
-    background: rgba(255, 255, 255, 0.4);
-    letter-spacing: .2rem;
+    letter-spacing: .25rem;
+}
+
+#mute-toggle {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    left: 18px;
+    bottom: 18px;
+    z-index: 10010;
+    font-size: 1.1em;
+    padding: 0.4em 1.2em;
+    border-radius: 1.5em;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: #fff;
+    transition: all 0.1s ease-out;
+}
+
+#mute-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#instructions {
+    text-align: center;
+    color: #fff;
+}
+
+.instructions-title {
+    border-bottom: 1px solid #fff;
+    display: inline;
+}
+
+.horizontal-scroll-wrapper {
+    display: flex;
+    overflow-y: hidden;
+    overflow-x: auto;
+    width: 100%;
+    max-width: 1200px;
+    /* transform: rotate(-90deg); */
+    /* transform-origin: right top; */
+    gap: 2rem;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1rem;
+    scrollbar-width: thin;
+}
+.horizontal-scroll-wrapper > div {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    /* transform: rotate(90deg); */
+    /* transform-origin: right top; */
+}
+
+@media (max-width: 600px) {
+    #instructions { font-size: 1em; max-width: 98vw; }
+    #start-button { font-size: 1.2em; padding: 0.5em 1.5em; }
+    .instruction-img { width: 28px; height: 28px; margin-right: 10px; }
 }

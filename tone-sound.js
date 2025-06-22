@@ -2,10 +2,10 @@ import * as Tone from "tone"; // sound library
 import SampleLibrary from '/Tonejs-Instruments.js';
 
 const bgmUrls = [
-  "/sounds/578599__auwenngebleau__slow-rain.m4a",
-  "/sounds/347848__foolboymedia__new-york-jazz-loop.wav",
-  "/sounds/sub-bass-line-by-alien-i-trust-125_bpm-289271.mp3",
-  "/sounds/721259__ncone__funky-beats.wav",
+  "/sounds/lluvia-relajante-rain-2-210937.mp3",
+  "/sounds/gentle-rain-for-relaxation-and-sleep-337279.mp3",
+  "/sounds/cozy-soft-rain-under-umbrella-116183.mp3",
+  "/sounds/rain-and-thunder-sfx-12820.mp3",
 ];
 
 let currentBgmIndex = 0;
@@ -27,10 +27,6 @@ Tone.loaded().then(() => {
   bgmPlayers.forEach(player => player.connect(analyser));
 });
 
-const sePlayer = new Tone.Player({
-  url: "/sounds/698632__suicdxsaturday__meow51252153-1.ogg",
-}).toDestination();
-
 // set reverb
 const reverb = new Tone.Reverb({
   decay: 4,
@@ -44,9 +40,11 @@ await reverb.generate();
 const effect = new Tone.FeedbackDelay("8n", 1 / 3);
 effect.wet.value = 0.2;
 
-export function playSE() {
-  sePlayer.start();
-}
+// global panner to control stereo position
+const globalPanner = new Tone.Panner(0);
+globalPanner.connect(effect);
+effect.connect(reverb);
+reverb.toDestination();
 
 export function playSound(heights, instrument = 'default') {
   let availableNotes;
@@ -58,7 +56,6 @@ export function playSound(heights, instrument = 'default') {
         synth = instruments['guitar-acoustic'];
         break;
     case 'piano':
-      console.log("piano");
       availableNotes = ['A7', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'];
         synth = instruments['piano'];
         break;
@@ -68,11 +65,8 @@ export function playSound(heights, instrument = 'default') {
         break;
     default:
         availableNotes = [
-          "C2", "D2", "E2", "F2", "G2", "A2", "B2",
           "C3", "D3", "E3", "F3", "G3", "A3", "B3",
-          "C4", "D4", "E4", "F4", "G4", "A4", "B4",
-          "C5", "D5", "E5", "F5", "G5", "A5", "B5",
-          "C6", "D6", "E6", "F6", "G6", "A6", "B6"
+          "C4", "D4", "E4", "F4", "G4", "A4", "B4"
         ];
         synth = new Tone.PolySynth(Tone.Synth);
         break;
@@ -88,21 +82,22 @@ export function playSound(heights, instrument = 'default') {
     } else if(notePos > 1){
       notePos = 1;
     }
-
     const n = availableNotes[noteIndex];
     ns.push(n);
   }
 
   const velocity = Math.random() * 0.5 + 0.5;
 
-  // シンセの設定（個別のボイスではなく、全体の設定を変更）
+  // settings for synth
   if(instrument === 'default') {
     synth.set({
       volume: -8,
+
       envelope: {
-        attack: 0.005,
-        release: 0.05,
-        sustain: 1,
+        attack: 0.01,
+        decay: 0.1,
+        release: 1.5,
+        sustain: 0.8
       },
     });
   } else {
@@ -112,24 +107,22 @@ export function playSound(heights, instrument = 'default') {
     synth.volume.value = -12;
   }
 
-  // エフェクトチェーンの作成
-  const panner = new Tone.Panner(notePos);
-  // シンセをエフェクトチェーンに接続
-  synth.connect(panner);
-  panner.connect(effect);
-  effect.connect(reverb);
-  reverb.toDestination(); // 最後にスピーカーへ
+  // renew globalPanner
+  globalPanner.pan.value = notePos;
 
-  // 音を鳴らす
-  // synth.triggerAttackRelease(ns, "8n", Tone.now(), velocity);
-  console.log('ns', ns);
+  // connect synth to globalPanner
+  synth.connect(globalPanner);
   synth.triggerAttackRelease(ns, "8n", Tone.now(), velocity);
 
-  // シンセをエフェクトチェーンから切断
-  // synth.disconnect(panner);
-  // panner.disconnect(effect);
-  // effect.disconnect(reverb);
-  // 音が鳴り終わった後にシンセをエフェクトチェーンから切断
+  // disconnect synth after a short time
+  setTimeout(() => {
+    try {
+      synth.disconnect(globalPanner);
+    } catch(e) {}
+    if(instrument === 'default') {
+      synth.dispose();
+    }
+  }, 500); // 8n
 }
 
 export async function startSound() {
@@ -142,4 +135,36 @@ export function switchBgm() {
   bgmPlayers[currentBgmIndex].stop();
   currentBgmIndex = (currentBgmIndex + 1) % bgmPlayers.length;
   bgmPlayers[currentBgmIndex].start();
+}
+
+const meowFiles = [
+  "/sounds/meow/cat-meow-1-fx-306178.mp3",
+  "/sounds/meow/cat-meow-2-fx-306181.mp3",
+  "/sounds/meow/cat-meow-4-fx-306180.mp3",
+  "/sounds/meow/cat-meow-8-fx-306184.mp3",
+  "/sounds/meow/cat-meow-11-fx-306193.mp3",
+  "/sounds/meow/cat-meow-13-fx-306192.mp3",
+  "/sounds/meow/cat-meow-297927.mp3",
+  "/sounds/meow/698632__suicdxsaturday__meow51252153-1.ogg"
+];
+
+const meowPlayers = new Array(meowFiles.length).fill(null).map((_, i) => {
+  return new Tone.Player({
+    url: meowFiles[i],
+    loop: false
+  }).toDestination();
+});
+
+export function playRandomMeow() {
+  console.log("play random meow sound");
+  for (const player of meowPlayers) {
+    if (player.state === 'started') {
+      return;
+    }
+  }
+  const index = Math.floor(Math.random() * meowPlayers.length);
+  const meowPlayer = meowPlayers[index];
+  if (meowPlayer.loaded) {
+    meowPlayer.start();
+  }
 }
