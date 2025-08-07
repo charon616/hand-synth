@@ -10,16 +10,18 @@
 </head>
 <body>
     <div id="start-screen">
-        <h1>
-            <picture>
-              <source srcset="/guide/title.webp" type="image/webp">
-              <img src="/guide/title.png" width="350" alt="Hand Synth on a Rainy Day"/>
-            </picture>
+        <h1 class="desktop-title">
+            Hand Synth on a Rainy Day
         </h1>
-        <div id="instructions">
-            <p class="instructions-title">How to enjoy this site</p>
 
-            <div class="horizontal-scroll-wrapper">
+        <h1 class="mobile-title">
+            Hand Synth<br/> on a<br/> Rainy Day
+        </h1>
+        
+        <div id="instructions">
+            <h2 class="instructions-title">How to enjoy this site</h2>
+
+            <div class="scrolling-wrapper">
                 <div>
                     <picture>
                         <source srcset="/guide/description1.webp" type="image/webp">
@@ -45,12 +47,15 @@
                     </picture>
                 </div>
             </div>
+            <div class="leftArrow">←</div>
+            <div class="rightArrow">→</div>
         </div>
         <button id="start-button">START</button>
     </div>
+    <button id="start-button-mobile">START</button>
     <button id="mute-toggle" class="mute-on">
-      <img id="mute-icon" src="/guide/speaker-high.svg" alt="mute"/>
-      <span>ON</span>
+        <img id="mute-icon" src="/guide/speaker-high.svg" alt="mute"/>
+        <span id="mute-text">ON</span>
     </button>
     <video id="video" style="display:none" autoplay playsinline></video>
     <canvas class="webgl"></canvas>
@@ -58,15 +63,5 @@
     <script type="module" src="/hand-detection.js"></script>
     <script type="module" src="/tone-sound.js"></script>
     <script type="module" src="/script.js"></script>
-    <script>
-    // convert scroll wheel to horizontal scroll
-    const hScroll = document.querySelector('.horizontal-scroll-wrapper');
-    if (hScroll) {
-      hScroll.addEventListener('wheel', function(e) {
-        e.preventDefault();
-        horizontal.scrollLeft += e.deltaY;
-      }, { passive: false });
-    }
-    </script>
 </body>
 </html>

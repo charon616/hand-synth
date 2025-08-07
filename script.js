@@ -908,26 +908,63 @@ const tickDesktop = () => {
     window.requestAnimationFrame(tickDesktop); // Call tickDesktop again on the next frame
 }
 
-// 横スクロールをScrollTriggerで制御
-window.addEventListener('DOMContentLoaded', () => {
-  const horizontal = document.querySelector('.horizontal-scroll');
-  if (horizontal) {
-    gsap.to(horizontal, {
-      x: () => -(horizontal.scrollWidth - horizontal.clientWidth),
-      ease: "none",
-      scrollTrigger: {
-        trigger: horizontal,
-        start: "top top",
-        end: () => "+=" + (horizontal.scrollWidth - horizontal.clientWidth),
-        scrub: true,
-        pin: true,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        horizontal: false
-      }
+// controll scroll direction
+gsap.registerPlugin(ScrollTrigger);
+let scrollTarget = document.querySelector('.scrolling-wrapper');
+let scrollSet = gsap.quickSetter(scrollTarget, "scrollLeft");
+
+// 矢印のDOM要素を取得
+const leftArrow = document.querySelector('.leftArrow');
+const rightArrow = document.querySelector('.rightArrow');
+const scrollWrapper = document.querySelector('.scrolling-wrapper');
+
+if (scrollWrapper && leftArrow && rightArrow) {
+    // 初期状態でスクロール可能か確認して矢印を表示/非表示
+    const updateArrowVisibility = () => {
+        if (scrollWrapper.scrollWidth <= scrollWrapper.clientWidth) {
+            leftArrow.style.display = 'none';
+            rightArrow.style.display = 'none';
+        } else {
+            leftArrow.style.display = scrollWrapper.scrollLeft === 0 ? 'none' : 'block';
+            rightArrow.style.display = scrollWrapper.scrollLeft + scrollWrapper.clientWidth >= scrollWrapper.scrollWidth ? 'none' : 'block';
+        }
+    };
+
+    // 矢印の初期状態を設定
+    updateArrowVisibility();
+
+    ScrollTrigger.observe({
+        target: scrollTarget, // can be any element (selector text is fine)
+        type: "wheel,touch", // comma-delimited list of what to listen for ("wheel,touch,scroll,pointer")
+        onChangeY: (self) => {
+            scrollSet(scrollSet(scrollTarget.scrollLeft + self.deltaY));
+            updateArrowVisibility();
+        }
     });
-  }
-});
+
+
+    // 矢印クリックでスクロール
+    leftArrow.addEventListener('click', () => {
+        gsap.to(scrollWrapper, {
+            scrollLeft: scrollWrapper.scrollLeft - 300,
+            duration: 0.5,
+            ease: 'power2.inOut',
+            onUpdate: updateArrowVisibility
+        });
+    });
+
+    rightArrow.addEventListener('click', () => {
+        gsap.to(scrollWrapper, {
+            scrollLeft: scrollWrapper.scrollLeft + 300,
+            duration: 0.5,
+            ease: 'power2.inOut',
+            onUpdate: updateArrowVisibility
+        });
+    });
+
+    // Update arrow visibility on window resize
+    window.addEventListener('resize', updateArrowVisibility);
+}
 
 // ミュートボタン制御
 const muteBtn = document.getElementById('mute-toggle');

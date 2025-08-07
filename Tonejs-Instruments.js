@@ -79,7 +79,7 @@ const SampleLibrary = {
                     }
                 )
 
-                console.log(t.baseUrl + t.instruments[i] + "/")
+                // console.log(t.baseUrl + t.instruments[i] + "/")
             }
 
             return rt
