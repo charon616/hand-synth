@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import * as Tone from 'tone';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { mapRange } from './utils.js'; // Import mapRange function
 
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -14,6 +15,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 import { detectFrame ,video } from './hand-detection.js'
 import { startSound, playSound, analyser, playRandomMeow, switchBgm } from './tone-sound.js'
+
+const isDebug = false; // Set to true to enable debug mode
 
 const HANDS_NUM = 4; // maximum number of hands
 
@@ -35,7 +38,6 @@ const rgbeLoader = new RGBELoader()
 rgbeLoader.load('/textures/environmentMap/studio_small_09_4k.hdr', (environmentMap) =>
 {
     environmentMap.mapping = THREE.EquirectangularReflectionMapping 
-    environmentMap.encoding = THREE.RGBEEncoding
     scene.background = new THREE.Color(0xD6D5D9) // gray
     scene.environment = environmentMap
 })
@@ -934,7 +936,9 @@ const tickDesktop = () => {
         }
     }
     
-    updateMemoryDisplay();
+    if(isDebug){
+        updateMemoryDisplay();
+    }
     effectComposer.render(); // Render with effects
     window.requestAnimationFrame(tickDesktop); // Call tickDesktop again on the next frame
 }
@@ -1013,18 +1017,20 @@ if (muteBtn) {
 }
 
 // Display memory usage for debugging
-const memoryDiv = document.createElement('div');
-memoryDiv.style.position = 'fixed';
-memoryDiv.style.right = '10px';
-memoryDiv.style.bottom = '10px';
-memoryDiv.style.background = 'rgba(0,0,0,0.7)';
-memoryDiv.style.color = '#fff';
-memoryDiv.style.fontSize = '14px';
-memoryDiv.style.padding = '6px 12px';
-memoryDiv.style.borderRadius = '8px';
-memoryDiv.style.zIndex = '9999';
-memoryDiv.innerText = 'Memory: --';
-document.body.appendChild(memoryDiv);
+if(isDebug) {
+    const memoryDiv = document.createElement('div');
+    memoryDiv.style.position = 'fixed';
+    memoryDiv.style.right = '10px';
+    memoryDiv.style.bottom = '10px';
+    memoryDiv.style.background = 'rgba(0,0,0,0.7)';
+    memoryDiv.style.color = '#fff';
+    memoryDiv.style.fontSize = '14px';
+    memoryDiv.style.padding = '6px 12px';
+    memoryDiv.style.borderRadius = '8px';
+    memoryDiv.style.zIndex = '9999';
+    memoryDiv.innerText = 'Memory: --';
+    document.body.appendChild(memoryDiv);
+}
 
 function updateMemoryDisplay() {
   if (window.performance && window.performance.memory) {
@@ -1049,12 +1055,3 @@ function tick() {
 }
 
 tick()
-
-// Utility function to map a value from one range to another
-function mapRange(value, inMin, inMax, outMin, outMax) {
-    if (inMax - inMin === 0) {
-        console.warn('mapRange: Zero division error. Check input range.');
-        return outMin; // Default to outMin to avoid Infinity
-    }
-    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-}

@@ -1,9 +1,9 @@
 // Register global utility functions
 // Map Range works like the map function in p5.js
-(function(global) {
-  function mapRange(value, inMin, inMax, outMin, outMax) {
-    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+export function mapRange(value, inMin, inMax, outMin, outMax) {
+  if (inMax - inMin === 0) {
+      console.warn('mapRange: Zero division error. Check input range.');
+      return outMin; // Default to outMin to avoid Infinity
   }
-
-  global.mapRange = mapRange;
-})(this);
+  return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+}

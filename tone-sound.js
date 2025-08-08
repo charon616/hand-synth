@@ -1,5 +1,6 @@
 import * as Tone from "tone"; // sound library
 import SampleLibrary from '/Tonejs-Instruments.js';
+import { mapRange } from './utils.js'; // Import mapRange function
 
 const bgmUrls = [
   "/sounds/lluvia-relajante-rain-2-210937.mp3",
