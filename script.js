@@ -463,6 +463,27 @@ gltfLoader.load(
     }
 );
 
+// Load disk4.glb
+gltfLoader.load(
+    '/models/disk4.glb',
+    (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+
+        // set position to the bottom-right
+        const offsetX = 1.15; // Adjust as needed
+        const offsetY = -0.75; // Adjust as needed
+        const x = camera.right - offsetX;
+        const y = camera.bottom - offsetY; // stack above if needed
+        model.position.set(x, y, -3)
+        model.rotation.set(Math.PI/2, 0, 0);
+        model.visible = false;
+        diskModels[3] = model;
+        scene.add(model);
+        updateDiskPositions();
+    }
+);
+
 // Helper: set disk positions based on target
 function updateDiskPositions(transition = false, fromIndex = null, toIndex = null) {
     const mainY = camera.bottom + 0.75; // main position (visible)
@@ -576,7 +597,8 @@ function processResults(results) {
                 // Mirror x-axis
                 let pos = ndcToWorld(-landmark.x * 2 + 1, -landmark.y * 2 + 1);
   
-                sphere.position.set(pos.x, pos.y, pos.z);
+                // Smoothly update the position using lerp
+                sphere.position.lerp(new THREE.Vector3(pos.x, pos.y, pos.z), 0.6);
                 sphereIndex++;
             }
   
@@ -660,8 +682,8 @@ videoPlane.position.z = 1
 // scene.add(videoPlane);
 
 let currentInstrumentIndex = 0;
+
 const instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
-// const instruments = ['default', 'default', 'default', 'default'];
 
 function switchInstrument() {
     currentInstrumentIndex = (currentInstrumentIndex + 1) % instruments.length;
@@ -675,12 +697,19 @@ const tickMobile = () =>
 const tickDesktop = () => {
     // Change cat scale based on audio input
     const values = analyser.getValue();
+    if (!values || values.length === 0) {
+        return;
+    }
+
     const averageValue = values.reduce((sum, value) => sum + value, 0) / values.length;
     const scaleValue = mapRange(averageValue, -120, -90, 0.75, 0.25);
 
-    if(cat) {
-        cat.scale.set(scaleValue, scaleValue, scaleValue);
-        cat2.scale.set(scaleValue, scaleValue, scaleValue);
+    if (cat) {
+        if (scaleValue && isFinite(scaleValue)) {
+            const targetScale = new THREE.Vector3(scaleValue, scaleValue, scaleValue);
+            cat.scale.lerp(targetScale, 0.8); // Smoothly interpolate to the target scale
+            cat2.scale.lerp(targetScale, 0.8); // Smoothly interpolate to the target scale
+        }
     }
 
     // Animation
@@ -815,7 +844,7 @@ const tickDesktop = () => {
         // Move objects if pinching
         for (let i = 0; i < handRayOrigins.length; i++) {
             if (isPinching[i]) {
-                // まだ掴んでいない場合のみ、最も近いnoteをセット
+                // if pinching, check if we can grab a note
                 if (!grabbedNotes[i]) {
                     raycaster[i].setFromCamera(handRayOrigins[i], camera);
                     const intersects = raycaster[i].intersectObjects(objectsToTest);
@@ -823,7 +852,7 @@ const tickDesktop = () => {
                         grabbedNotes[i] = intersects[0].object;
                     }
                 }
-                // 掴んでいるnoteがあれば移動
+                // if we have a grabbed note, update its position
                 if (grabbedNotes[i]) {
                     const intersection = new THREE.Vector3();
                     raycaster[i].ray.intersectPlane(basePlane, intersection);
@@ -831,10 +860,12 @@ const tickDesktop = () => {
                         grabbedNotes[i].intersections = new Array(HANDS_NUM).fill(null);
                     }
                     grabbedNotes[i].intersections[i] = intersection.clone();
-                    grabbedNotes[i].position.copy(grabbedNotes[i].intersections[i]);
+
+                    // Add smoothing using lerp
+                    grabbedNotes[i].position.lerp(grabbedNotes[i].intersections[i], 0.3);
                 }
             } else {
-                // ピンチ解除時は掴みをリセット
+                // when not pinching, reset grabbed note
                 grabbedNotes[i] = null;
             }
         }
@@ -913,13 +944,13 @@ gsap.registerPlugin(ScrollTrigger);
 let scrollTarget = document.querySelector('.scrolling-wrapper');
 let scrollSet = gsap.quickSetter(scrollTarget, "scrollLeft");
 
-// 矢印のDOM要素を取得
+// Get the left and right arrows and the scrolling wrapper
 const leftArrow = document.querySelector('.leftArrow');
 const rightArrow = document.querySelector('.rightArrow');
 const scrollWrapper = document.querySelector('.scrolling-wrapper');
 
 if (scrollWrapper && leftArrow && rightArrow) {
-    // 初期状態でスクロール可能か確認して矢印を表示/非表示
+    // Define the initial visibility of arrows
     const updateArrowVisibility = () => {
         if (scrollWrapper.scrollWidth <= scrollWrapper.clientWidth) {
             leftArrow.style.display = 'none';
@@ -930,7 +961,7 @@ if (scrollWrapper && leftArrow && rightArrow) {
         }
     };
 
-    // 矢印の初期状態を設定
+    // Initial visibility check
     updateArrowVisibility();
 
     ScrollTrigger.observe({
@@ -943,7 +974,7 @@ if (scrollWrapper && leftArrow && rightArrow) {
     });
 
 
-    // 矢印クリックでスクロール
+    // Scroll left when the left arrow is clicked
     leftArrow.addEventListener('click', () => {
         gsap.to(scrollWrapper, {
             scrollLeft: scrollWrapper.scrollLeft - 300,
@@ -953,6 +984,7 @@ if (scrollWrapper && leftArrow && rightArrow) {
         });
     });
 
+    // Scroll right when the right arrow is clicked
     rightArrow.addEventListener('click', () => {
         gsap.to(scrollWrapper, {
             scrollLeft: scrollWrapper.scrollLeft + 300,
@@ -966,7 +998,7 @@ if (scrollWrapper && leftArrow && rightArrow) {
     window.addEventListener('resize', updateArrowVisibility);
 }
 
-// ミュートボタン制御
+// Mute button functionality
 const muteBtn = document.getElementById('mute-toggle');
 const muteIcon = document.getElementById('mute-icon');
 let isMuted = false;
@@ -980,7 +1012,7 @@ if (muteBtn) {
     });
 }
 
-// メモリ量表示用のDOMを追加
+// Display memory usage for debugging
 const memoryDiv = document.createElement('div');
 memoryDiv.style.position = 'fixed';
 memoryDiv.style.right = '10px';
@@ -1017,3 +1049,12 @@ function tick() {
 }
 
 tick()
+
+// Utility function to map a value from one range to another
+function mapRange(value, inMin, inMax, outMin, outMax) {
+    if (inMax - inMin === 0) {
+        console.warn('mapRange: Zero division error. Check input range.');
+        return outMin; // Default to outMin to avoid Infinity
+    }
+    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+}

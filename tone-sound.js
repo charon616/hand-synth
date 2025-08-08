@@ -13,6 +13,7 @@ let currentBgmIndex = 0;
 const bgmPlayers = bgmUrls.map(url => new Tone.Player({
   url: url,
   loop: true,
+  volume: -6
 }).toDestination());
 
 var instruments = SampleLibrary.load({
@@ -25,6 +26,8 @@ var instruments = SampleLibrary.load({
 export const analyser = new Tone.Analyser("fft", 1024);
 Tone.loaded().then(() => {
   bgmPlayers.forEach(player => player.connect(analyser));
+  document.getElementById('start-button').disabled = false; // Enable the button after all buffers are loaded
+  console.log("All audio buffers are loaded.");
 });
 
 // set reverb
@@ -46,30 +49,40 @@ globalPanner.connect(effect);
 effect.connect(reverb);
 reverb.toDestination();
 
+let lastPlayTime = 0; // Track the last play time
+const MIN_PLAY_INTERVAL = 200; // Minimum interval in milliseconds
+
 export function playSound(heights, instrument = 'default') {
+  const now = Date.now();
+  if (now - lastPlayTime < MIN_PLAY_INTERVAL) {
+    console.warn('Skipping sound to avoid overlap');
+    return; // Skip if the interval is too short
+  }
+  lastPlayTime = now; // Update the last play time
+
   let availableNotes;
   let synth;
 
   switch (instrument) {
     case 'guitar-acoustic':
       availableNotes = ['F4', 'G2', 'G3', 'G4', 'A2', 'A3', 'A4', 'B2', 'B3', 'B4', 'C3', 'C4', 'C5', 'D2', 'D3', 'D4', 'D5', 'E2', 'E3', 'E4', 'F2', 'F3'];
-        synth = instruments['guitar-acoustic'];
-        break;
+      synth = instruments['guitar-acoustic'];
+      break;
     case 'piano':
       availableNotes = ['A7', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'];
-        synth = instruments['piano'];
-        break;
+      synth = instruments['piano'];
+      break;
     case 'violin':
       availableNotes = ['A3', 'A4', 'A5', 'A6', 'C4', 'C5', 'C6', 'C7', 'E4', 'E5', 'E6', 'G4', 'G5', 'G6'];
-        synth = instruments['violin'];
-        break;
+      synth = instruments['violin'];
+      break;
     default:
-        availableNotes = [
-          "C3", "D3", "E3", "F3", "G3", "A3", "B3",
-          "C4", "D4", "E4", "F4", "G4", "A4", "B4"
-        ];
-        synth = new Tone.PolySynth(Tone.Synth);
-        break;
+      availableNotes = [
+        "C3", "D3", "E3", "F3", "G3", "A3", "B3",
+        "C4", "D4", "E4", "F4", "G4", "A4", "B4"
+      ];
+      synth = new Tone.PolySynth(Tone.Synth);
+      break;
   }
 
   let ns = [];
@@ -132,7 +145,9 @@ export async function startSound() {
 }
 
 export function switchBgm() {
-  bgmPlayers[currentBgmIndex].stop();
+  const previousBgmIndex = currentBgmIndex;
+  bgmPlayers[previousBgmIndex].stop(); // Stop the previous BGM without disposing
+
   currentBgmIndex = (currentBgmIndex + 1) % bgmPlayers.length;
   bgmPlayers[currentBgmIndex].start();
 }
@@ -159,6 +174,7 @@ export function playRandomMeow() {
   console.log("play random meow sound");
   for (const player of meowPlayers) {
     if (player.state === 'started') {
+      console.log("Meow player is already playing, skipping this one.");
       return;
     }
   }
@@ -166,5 +182,9 @@ export function playRandomMeow() {
   const meowPlayer = meowPlayers[index];
   if (meowPlayer.loaded) {
     meowPlayer.start();
+    meowPlayer.onstop = () => {
+      meowPlayer.dispose(); // Release resources after playback ends
+      console.log(`Meow player ${index} resources released.`);
+    };
   }
 }
