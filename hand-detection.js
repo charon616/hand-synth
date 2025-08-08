@@ -15,7 +15,6 @@ navigator.mediaDevices.enumerateDevices()
 // Get user media
 navigator.mediaDevices.getUserMedia({ 
     video: true, 
-    // video: { deviceId: { exact: '3ef6272af5915d4bace63e9a6743a32b201a88c7ef526ae3df3e02ef631ab9f1' } },
     audio: false 
 })
     .then(function(stream) {

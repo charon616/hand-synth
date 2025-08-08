@@ -13,11 +13,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-import { detectFrame ,video } from './hand-detection.js'
+import { detectFrame, video } from './hand-detection.js'
 import { startSound, playSound, analyser, playRandomMeow, switchBgm } from './tone-sound.js'
 
 const isDebug = false; // Set to true to enable debug mode
-
 const HANDS_NUM = 4; // maximum number of hands
 
 // Duration threshold (in seconds) for touching the disk before switching
@@ -126,15 +125,16 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 /**
  * Controls
  */
-// --- OrbitControls for debug ---
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.enablePan = true;
-controls.enableZoom = true;
-controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;
-controls.minZoom = 0.5;
-controls.maxZoom = 2.5;
+if(isDebug) {
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    controls.dampingFactor = 0.08;
+    controls.screenSpacePanning = false;
+    controls.minZoom = 0.5;
+    controls.maxZoom = 2.5;
+}
 
 /**
  * Material
@@ -501,24 +501,6 @@ function updateDiskPositions(transition = false, fromIndex = null, toIndex = nul
         }
     }
 }
-
-// --- Add event to toggle disk rotation (for debug, press 'd') ---
-window.addEventListener('keypress', (e) => {
-    if (e.key === 'p') {
-        if (playerActions && playerActions.length > 0) {
-            // Stop all actions first
-            playerActions.forEach(action => action.stop());
-            // Play all actions simultaneously
-            playerActions.forEach((action, idx) => {
-                console.log(`[DEBUG] 'p' key pressed: playing animation index ${idx}`);
-                action.reset();
-                action.play();
-            });
-        } else {
-            console.warn('[DEBUG] playerActions are not ready when pressing "p".');
-        }
-    }
-});
 
 /**
  * Raycaster
