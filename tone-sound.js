@@ -1,13 +1,23 @@
 import * as Tone from "tone"; // sound library
 import SampleLibrary from '/Tonejs-Instruments.js';
-import { mapRange } from './utils.js'; // Import mapRange function
+import { mapRange, isMobile } from './utils.js'; // Import mapRange function
 
-const bgmUrls = [
-  "/sounds/lluvia-relajante-rain-2-210937.mp3",
-  "/sounds/gentle-rain-for-relaxation-and-sleep-337279.mp3",
-  "/sounds/cozy-soft-rain-under-umbrella-116183.mp3",
-  "/sounds/rain-and-thunder-sfx-12820.mp3",
-];
+const isMobileDevice = isMobile(); // Check if the device is mobile
+
+let bgmUrls;
+
+if(!isMobileDevice) {
+  bgmUrls = [
+    "/sounds/lluvia-relajante-rain-2-210937.mp3",
+    "/sounds/gentle-rain-for-relaxation-and-sleep-337279.mp3",
+    "/sounds/cozy-soft-rain-under-umbrella-116183.mp3",
+    "/sounds/rain-and-thunder-sfx-12820.mp3",
+  ];
+} else {
+  bgmUrls = [
+    "/sounds/lluvia-relajante-rain-2-210937.mp3"
+  ];
+}
 
 let currentBgmIndex = 0;
 
@@ -17,17 +27,28 @@ const bgmPlayers = bgmUrls.map(url => new Tone.Player({
   volume: -6
 }).toDestination());
 
-var instruments = SampleLibrary.load({
+let instruments;
+if(!isMobileDevice) {
+  instruments = SampleLibrary.load({
     instruments: ["piano", "guitar-acoustic", "organ", "violin"],
     // minify: true,
     onload: function() {
     }
-});
+  });
+} else {
+  instruments = SampleLibrary.load({
+    instruments: [],
+    // minify: true,
+    onload: function() {
+    }
+  });
+}
 
 export const analyser = new Tone.Analyser("fft", 1024);
 Tone.loaded().then(() => {
   bgmPlayers.forEach(player => player.connect(analyser));
   document.getElementById('start-button').disabled = false; // Enable the button after all buffers are loaded
+  document.getElementById('start-button-mobile').disabled = false; // Enable the button after all buffers are loaded
   console.log("All audio buffers are loaded.");
 });
 
@@ -89,7 +110,13 @@ export function playSound(heights, instrument = 'default') {
   let ns = [];
   let notePos = 0;
   for (let height of heights) {
-    const noteIndex = Math.floor(mapRange(height['note'], -3, 3, 0, availableNotes.length - 1));
+    // Use a narrower range for mobile (x: -2 to 2), else default -3 to 3
+    let noteIndex;
+    if (isMobileDevice) {
+      noteIndex = Math.floor(mapRange(height['note'], -2, 2, 0, availableNotes.length - 1));
+    } else {
+      noteIndex = Math.floor(mapRange(height['note'], -3, 3, 0, availableNotes.length - 1));
+    }
     notePos = height['pos'];
     if(notePos < -1){
       notePos = -1;
@@ -153,16 +180,25 @@ export function switchBgm() {
   bgmPlayers[currentBgmIndex].start();
 }
 
-const meowFiles = [
-  "/sounds/meow/cat-meow-1-fx-306178.mp3",
-  "/sounds/meow/cat-meow-2-fx-306181.mp3",
-  "/sounds/meow/cat-meow-4-fx-306180.mp3",
-  "/sounds/meow/cat-meow-8-fx-306184.mp3",
-  "/sounds/meow/cat-meow-11-fx-306193.mp3",
-  "/sounds/meow/cat-meow-13-fx-306192.mp3",
-  "/sounds/meow/cat-meow-297927.mp3",
-  "/sounds/meow/698632__suicdxsaturday__meow51252153-1.ogg"
-];
+let meowFiles;
+
+if(!isMobileDevice) {
+  meowFiles = [
+    "/sounds/meow/cat-meow-1-fx-306178.mp3",
+    "/sounds/meow/cat-meow-2-fx-306181.mp3",
+    "/sounds/meow/cat-meow-4-fx-306180.mp3",
+    "/sounds/meow/cat-meow-8-fx-306184.mp3",
+    "/sounds/meow/cat-meow-11-fx-306193.mp3",
+    "/sounds/meow/cat-meow-13-fx-306192.mp3",
+    "/sounds/meow/cat-meow-297927.mp3",
+    "/sounds/meow/698632__suicdxsaturday__meow51252153-1.ogg"
+  ];
+} else {
+  meowFiles = [
+    "/sounds/meow/cat-meow-1-fx-306178.mp3",
+    "/sounds/meow/cat-meow-2-fx-306181.mp3"
+  ];
+}
 
 const meowPlayers = new Array(meowFiles.length).fill(null).map((_, i) => {
   return new Tone.Player({
@@ -181,11 +217,10 @@ export function playRandomMeow() {
   }
   const index = Math.floor(Math.random() * meowPlayers.length);
   const meowPlayer = meowPlayers[index];
-  if (meowPlayer.loaded) {
+  if (meowPlayer.buffer && meowPlayer.buffer.loaded) {
     meowPlayer.start();
-    meowPlayer.onstop = () => {
-      meowPlayer.dispose(); // Release resources after playback ends
-      console.log(`Meow player ${index} resources released.`);
-    };
+    // Remove dispose onstop: Tone.Player is reusable
+  } else {
+    console.log(`Meow player ${index} buffer not loaded yet.`);
   }
 }

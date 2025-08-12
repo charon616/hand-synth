@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import * as Tone from 'tone';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { mapRange } from './utils.js'; // Import mapRange function
+import { mapRange, isMobile } from './utils.js'; // Import mapRange function
 
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -17,12 +17,20 @@ import { detectFrame, video } from './hand-detection.js'
 import { startSound, playSound, analyser, playRandomMeow, switchBgm } from './tone-sound.js'
 
 const isDebug = false; // Set to true to enable debug mode
-const HANDS_NUM = 4; // maximum number of hands
+const isMobileDevice = isMobile(); // Check if the device is mobile
+let HANDS_NUM;
+if(!isMobileDevice){
+    HANDS_NUM = 4; // maximum number of hands
+} else {
+    HANDS_NUM = 1; // maximum number of hands on mobile
+}
 
-// Duration threshold (in seconds) for touching the disk before switching
-const DISK_TOUCH_DURATION_THRESHOLD = 0.5;
-// Store touch start times for each hand-disk pair
-let diskTouchTimers = Array(HANDS_NUM).fill(null).map(() => Array(3).fill(null));
+const DISK_TOUCH_DURATION_THRESHOLD = 0.5; // Duration threshold (in seconds) for touching the disk before switching
+let diskTouchTimers = Array(HANDS_NUM).fill(null).map(() => Array(3).fill(null)); // Store touch start times for each hand-disk pair
+
+/**
+ * Wgb GL scene settings
+ */
 
 /**
  * Base
@@ -33,13 +41,15 @@ const scene = new THREE.Scene() // Scene
 /**
  * Environment map
  */
-const rgbeLoader = new RGBELoader()
-rgbeLoader.load('/textures/environmentMap/studio_small_09_4k.hdr', (environmentMap) =>
-{
-    environmentMap.mapping = THREE.EquirectangularReflectionMapping 
-    scene.background = new THREE.Color(0xD6D5D9) // gray
-    scene.environment = environmentMap
-})
+if(!isMobileDevice){
+    const rgbeLoader = new RGBELoader()
+    rgbeLoader.load('/textures/environmentMap/studio_small_09_4k.hdr', (environmentMap) =>
+    {
+        environmentMap.mapping = THREE.EquirectangularReflectionMapping 
+        scene.background = new THREE.Color(0xD6D5D9) // gray
+        scene.environment = environmentMap
+    })
+}
 
 /**
  * Lights
@@ -104,12 +114,25 @@ scene.add(camera);
  * Audio
  */
 let isStart = false
+
 // After the start button is clicked, start the sound
-document.getElementById('start-button').addEventListener('click', async () => {
-    await startSound();
-    isStart = true
-    document.getElementById('start-screen').style.display = 'none';
-});
+if(!isMobileDevice) {
+    document.getElementById('start-button').addEventListener('click', async () => {
+        await startSound();
+        console.log("Starting sound...");
+        isStart = true;
+        document.getElementById('start-screen').style.display = 'none';
+    });
+} else {
+    document.getElementById('start-button-mobile').addEventListener('click', async () => {
+        await startSound();
+        console.log("Starting sound...");
+        isStart = true;
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('start-button-mobile').style.display = 'none'; // Hide the mobile start button
+    });
+}
+
 
 /**
  * Renderer
@@ -139,73 +162,95 @@ if(isDebug) {
 /**
  * Material
  */
-// MeshPhysicalMaterial for notes elements
-const material = new THREE.MeshPhysicalMaterial()
-material.metalness = 0
-material.roughness = 0.05
-material.transparent = true
+const textureLoader = new THREE.TextureLoader();
+let material, landmarkMaterial;
 
-// Clearcoat
-material.clearcoat = 0.5
-material.clearcoatRoughness = 1
+if(!isMobileDevice) {
+    material = new THREE.MeshPhysicalMaterial() // for notes
+    material.metalness = 0
+    material.roughness = 0.05
+    material.transparent = true
+    
+    // Clearcoat
+    material.clearcoat = 0.5
+    material.clearcoatRoughness = 1
+    
+    // Sheen
+    material.sheen = 1
+    material.sheenRoughness = 1
+    material.sheenColor.set('#949494')
+    
+    // Iridescence
+    material.iridescence = 1
+    material.iridescenceIOR = 1
+    material.iridescenceThickness = [ 100, 360 ]
+    
+    // Transmission
+    material.transmission = 1
+    material.ior = 1.8
+    material.thickness = 0.5
+    
+    material.color = new THREE.Color(0x333333)
+    
+    landmarkMaterial = new THREE.MeshPhysicalMaterial() // for hand landmarks
+    landmarkMaterial.metalness = 0
+    landmarkMaterial.roughness = 0
+    landmarkMaterial.transparent = true
+    
+    // Clearcoat
+    landmarkMaterial.clearcoat = 0.5
+    landmarkMaterial.clearcoatRoughness = 1
+    
+    // Transmission
+    landmarkMaterial.transmission = 1
+    landmarkMaterial.ior = 2.2
+    landmarkMaterial.thickness = 0.1
+} else {
+    const matcapTexture = textureLoader.load('/textures/matcaps/015 Glass (Blur Options).png');
+    const matcapTexture2 = textureLoader.load('/textures/matcaps/Matcap9.png');
 
-// Sheen
-material.sheen = 1
-material.sheenRoughness = 1
-material.sheenColor.set('#949494')
+    material = new THREE.MeshMatcapMaterial() // for notes
+    material.matcap = matcapTexture
 
-// Iridescence
-material.iridescence = 1
-material.iridescenceIOR = 1
-material.iridescenceThickness = [ 100, 360 ]
-
-// Transmission
-material.transmission = 1
-material.ior = 1.8
-material.thickness = 0.5
-
-material.color = new THREE.Color(0x333333)
-
-// MeshPhysicalMaterial for hand landmarks
-const landmarkMaterial = new THREE.MeshPhysicalMaterial()
-landmarkMaterial.metalness = 0
-landmarkMaterial.roughness = 0
-landmarkMaterial.transparent = true
-
-// Clearcoat
-landmarkMaterial.clearcoat = 0.5
-landmarkMaterial.clearcoatRoughness = 1
-
-// Transmission
-landmarkMaterial.transmission = 1
-landmarkMaterial.ior = 2.2
-landmarkMaterial.thickness = 0.1
+    landmarkMaterial = new THREE.MeshMatcapMaterial() // for hand landmarks
+    landmarkMaterial.matcap = matcapTexture2
+}
 
 /**
  * Postprocessing
  */
-const effectComposer = new EffectComposer(renderer)
-effectComposer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-effectComposer.setSize(sizes.width, sizes.height)
+let effectComposer, renderScene, gtaoPass, outputPass;
+if(!isMobileDevice) {
+    effectComposer = new EffectComposer(renderer)
+    effectComposer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    effectComposer.setSize(sizes.width, sizes.height)
+    
+    renderScene = new RenderPass(scene, camera)
+    effectComposer.addPass(renderScene)
+    
+    gtaoPass = new GTAOPass(scene, camera);
+    effectComposer.addPass(gtaoPass);
+    
+    outputPass = new OutputPass()
+    effectComposer.addPass(outputPass) 
+}
 
-const renderScene = new RenderPass(scene, camera)
-effectComposer.addPass(renderScene)
+let textureUrls;
 
-const gtaoPass = new GTAOPass(scene, camera);
-effectComposer.addPass(gtaoPass);
-
-const outputPass = new OutputPass()
-effectComposer.addPass(outputPass) 
-
-const textureUrls = [
-    '/textures/jose-fontano-TdPQp3fjzOw-unsplash_min.jpg',
-    '/textures/tina-sara-jy-uS8iJhX4-unsplash_min.jpg',
-    '/textures/cole-keister-SG4fPCsywj4-unsplash_min.jpg',
-    '/textures/c-g-JgDUVGAXsso-unsplash_min.jpg'
-];
+if(!isMobileDevice) {
+    textureUrls = [
+        '/textures/jose-fontano-TdPQp3fjzOw-unsplash_min.jpg',
+        '/textures/tina-sara-jy-uS8iJhX4-unsplash_min.jpg',
+        '/textures/cole-keister-SG4fPCsywj4-unsplash_min.jpg',
+        '/textures/c-g-JgDUVGAXsso-unsplash_min.jpg'
+    ];
+} else {
+    textureUrls = [
+        '/textures/jose-fontano-TdPQp3fjzOw-unsplash_min.jpg'
+    ];
+}
 let currentTextureIndex = 0;
 
-const textureLoader = new THREE.TextureLoader();
 const textures = textureUrls.map(url => textureLoader.load(url));
 // Adjust texture repeat to fit the plane
 textures.forEach(texture => {
@@ -232,57 +277,105 @@ function switchTexture() {
  */
 
 // Notes
-const vibrantColors = [
-    0xef2a28, // red
-    0xffe300, // yellow
-    0xa8c7fa, // lightblue
-    0xff85c3, // pink
-    0x2d5ed5, // blue
-    0x48c9b0, // green
-    0xf39c12, // orange
-    0x85929e, // gray
-    0xd580ff, // purple
-    0x00b894, // teal
-];
+let vibrantColors, notePositions;
+if (!isMobileDevice) {
+    vibrantColors = [
+        0xef2a28, // red
+        0xffe300, // yellow
+        0xa8c7fa, // lightblue
+        0xff85c3, // pink
+        0x2d5ed5, // blue
+        0x48c9b0, // green
+        0xf39c12, // orange
+        0x85929e, // gray
+        0xd580ff, // purple
+        0x00b894, // teal
+    ];
+    notePositions = [-5, -3, -2.5, -1, 0, 0.5, 1, 3, 4, 5]; // x positions for desktop
+} else {
+    vibrantColors = [
+        0xef2a28, // red
+        0xffe300, // yellow
+        0xa8c7fa, // lightblue
+        0xff85c3, // pink
+        0x2d5ed5 // blue
+    ];
+    notePositions = [-2, -1, -0, 1, 2]; // y positions for mobile
+}
 const notes = [];
-const notePositions = [-5, -3, -2.5, -1, 0, 0.5, 1, 3, 4, 5]; // x positions
 
 for (let i = 0; i < notePositions.length; i++) {
-    let geometry;
-    // Set random geometry
-    const rand = Math.random();
-    if (rand < 0.25) {
-        geometry = new THREE.SphereGeometry(0.45, 32, 32);
-    } else if (rand < 0.5) {
-        geometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 32);
-    } else if (rand < 0.75) {
-        geometry = new RoundedBoxGeometry( .85, .85, .85, 7, 0.15 );
+    let geometry, note;
+    
+    if (!isMobileDevice) {
+        // Set random geometry
+        const rand = Math.random();
+        if (rand < 0.25) {
+            geometry = new THREE.SphereGeometry(0.45, 32, 32);
+        } else if (rand < 0.5) {
+            geometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 32);
+        } else if (rand < 0.75) {
+            geometry = new RoundedBoxGeometry( .85, .85, .85, 7, 0.15 );
+        } else {
+            geometry = new THREE.ConeGeometry(0.5, 0.9, 32 ); 
+        }
+    
+        // Set random color
+        const temp_mat = material.clone();
+        const randomColor = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
+        temp_mat.color = new THREE.Color(randomColor);
+    
+        note = new THREE.Mesh(
+            geometry,
+            temp_mat
+        );
+
+        // Set random rotation speed
+        note.rotationSpeed = {
+            x: Math.random() * 0.3,
+            y: Math.random() * 0.3,
+            z: Math.random() * 0.3
+        };
+
+        // Desktop: x from notePositions, y random
+        const ypos = Math.random() * 6 - 3;
+        note.position.x = notePositions[i];
+        note.position.y = ypos;
     } else {
-        geometry = new THREE.ConeGeometry(0.5, 0.9, 32 ); 
+        // Set random geometry
+        const rand = Math.random();
+        if (rand < 0.25) {
+            geometry = new THREE.SphereGeometry(0.35, 32, 32);
+        } else if (rand < 0.5) {
+            geometry = new THREE.CylinderGeometry(0.25, 0.25, .8, 32);
+        } else if (rand < 0.75) {
+            geometry = new THREE.BoxGeometry( .65, .65, .65);
+        } else {
+            geometry = new THREE.ConeGeometry(0.4, 0.7, 32); 
+        }
+    
+        // Set random color
+        // const temp_mat = material.clone();
+        // const randomColor = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
+        // temp_mat.color = new THREE.Color(randomColor);
+    
+        note = new THREE.Mesh(
+            geometry,
+            material
+        );
+
+        // Set random rotation speed
+        note.rotationSpeed = {
+            x: Math.random() * 0.2,
+            y: Math.random() * 0.2,
+            z: Math.random() * 0.2
+        };
+
+        // Align vertically: y from notePositions, x fixed
+        const xpos = Math.random() * 2 - 1;
+        note.position.x = xpos;
+        note.position.y = notePositions[i];
     }
-
-    // Set random color
-    const temp_mat = material.clone();
-    const randomColor = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
-    temp_mat.color = new THREE.Color(randomColor);
-
-    const note = new THREE.Mesh(
-        geometry,
-        temp_mat
-    );
-
-    // Set random rotation speed
-    note.rotationSpeed = {
-        x: Math.random() * 0.3,
-        y: Math.random() * 0.3,
-        z: Math.random() * 0.3
-    };
-
-    // set random y position
-    const ypos = Math.random() * 6 - 3;
-
-    note.position.x = notePositions[i];
-    note.position.y = ypos;
     note.position.z = 0;
     note.castShadow = true;
     notes.push(note);
@@ -319,8 +412,15 @@ const progressBarMaterial = new THREE.MeshPhysicalMaterial({
 const progressBar = new THREE.Mesh(progressBarGeometry, progressBarMaterial);
 progressBar.castShadow = false;
 progressBar.receiveShadow = false;
+if(!isMobileDevice) {
+    progressBar.rotation.z = 0; // Set to vertical orientation
+} else {
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI / 2 );
+    progressBar.quaternion.copy(quaternion);
+}
+
 progressBar.position.set(0, 0, 0.11); // Slightly above the plane
-progressBar.rotation.z = 0; // Set to vertical orientation
 scene.add(progressBar);
 
 /**
@@ -340,151 +440,186 @@ let currentDiskIndex = 0;
 
 let diskTransitioning = false;
 
-// Load cat models
-gltfLoader.load(
-    '/models/cat.glb',
-    (gltf) =>
-    {
-        cat = gltf.scene
-        cat.scale.set(0.5, 0.5, 0.5)
-
-        // set position to the bottom-left
-        const offsetX = 0.75; // Adjust as needed
-        const offsetY = 0.1; // Adjust as needed
-        const x = camera.left + offsetX;
-        const y = camera.bottom - offsetY;
-
-        gltf.scene.position.set(x, y, 0)
-        cat.rotation.set(0.5, 0.67, -0.1) 
-
-        cat.traverse((child) => {
-            if (child.isMesh) {
-                child.receiveShadow = true;
-            }
-        });
-
-        cat2 = cat.clone()
-        cat2.traverse((child) => {
-            if (child.isMesh) {
-                child.material = material;
-            }
-        });
-
-        scene.add(cat)
-        scene.add(cat2)
-        return cat
-    }
-)
-// Load player_anim.glb (with Start/Stop animations)
-gltfLoader.load(
-    '/models/player_anim.glb',
-    (gltf) => {
-        playerModel = gltf.scene;
-        playerModel.scale.set(1.5, 1.5, 1.5);
-
-        // set position to the bottom-right
-        const offsetX = 1.15; // Adjust as needed
-        const offsetY = -0.75; // Adjust as needed
-        const x = camera.right - offsetX;
-        const y = camera.bottom - offsetY;
-
-        playerModel.position.set(x, y, -3)
-        playerModel.rotation.set(Math.PI/2, 0, 0);
-
-        // Animation setup for Start/Stop
-        if (gltf.animations && gltf.animations.length > 0) {
-            playerMixer = new THREE.AnimationMixer(playerModel);
-            playerActions = {};
-            gltf.animations.forEach(clip => {
-                playerActions[clip.name] = playerMixer.clipAction(clip);
-                playerActions[clip.name].loop = THREE.LoopOnce;
-                playerActions[clip.name].clampWhenFinished = true;
+if(!isMobileDevice) {
+    // Load cat models
+    gltfLoader.load(
+        '/models/cat.glb',
+        (gltf) =>
+        {
+            cat = gltf.scene
+            cat.scale.set(0.5, 0.5, 0.5)
+    
+            // set position to the bottom-left
+            const offsetX = 0.75; // Adjust as needed
+            const offsetY = 0.1; // Adjust as needed
+            const x = camera.left + offsetX;
+            const y = camera.bottom - offsetY;
+    
+            gltf.scene.position.set(x, y, 0)
+            cat.rotation.set(0.5, 0.67, -0.1) 
+    
+            cat.traverse((child) => {
+                if (child.isMesh) {
+                    child.receiveShadow = true;
+                }
             });
+    
+            cat2 = cat.clone()
+            cat2.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = material;
+                }
+            });
+    
+            scene.add(cat)
+            scene.add(cat2)
+            return cat
         }
-        scene.add(playerModel);
-    }
-);
-// Load disk1.glb
-gltfLoader.load(
-    '/models/disk1.glb',
-    (gltf) => {
-        const model = gltf.scene;
-        model.scale.set(1.5, 1.5, 1.5);
+    )
+} else {
+    // Load cat models
+    gltfLoader.load(
+        '/models/cat.glb',
+        (gltf) =>
+        {
+            cat = gltf.scene
+            cat.scale.set(0.5, 0.5, 0.5)
+    
+            // set position to the bottom-left
+            const offsetX = 0.75; // Adjust as needed
+            const offsetY = 0.1; // Adjust as needed
+            const x = camera.left + offsetX;
+            const y = camera.bottom - offsetY;
+    
+            gltf.scene.position.set(x, y, 0)
+            cat.rotation.set(0.5, 0.67, -0.1) 
+    
+            cat.traverse((child) => {
+                if (child.isMesh) {
+                    child.receiveShadow = true;
+                }
+            });
+    
+            scene.add(cat)
+            return cat
+        }
+    )
+}
 
-        // set position to the bottom-right
-        const offsetX = 1.15; // Adjust as needed
-        const offsetY = -0.75; // Adjust as needed
-        const x = camera.right - offsetX;
-        const y = camera.bottom - offsetY;
-        model.position.set(x, y, -3)
-        model.rotation.set(Math.PI/2, 0, 0);
-        model.visible = true;
-        diskModels[0] = model;
-        scene.add(model);
-        updateDiskPositions();
-    }
-);
-// Load disk2.glb
-gltfLoader.load(
-    '/models/disk2.glb',
-    (gltf) => {
-        const model = gltf.scene;
-        model.scale.set(1.5, 1.5, 1.5);
+// Load player_anim.glb (with Start/Stop animations)
+if(!isMobileDevice) {
+    gltfLoader.load(
+        '/models/player_anim.glb',
+        (gltf) => {
+            playerModel = gltf.scene;
+            playerModel.scale.set(1.5, 1.5, 1.5);
 
-        // set position to the bottom-right
-        const offsetX = 1.15; // Adjust as needed
-        const offsetY = -0.75; // Adjust as needed
-        const x = camera.right - offsetX;
-        const y = camera.bottom - offsetY; // stack above if needed
-        model.position.set(x, y, -3)
-        model.rotation.set(Math.PI/2, 0, 0);
-        model.visible = false;
-        diskModels[1] = model;
-        scene.add(model);
-        updateDiskPositions();
-    }
-);
-// Load disk3.glb
-gltfLoader.load(
-    '/models/disk3.glb',
-    (gltf) => {
-        const model = gltf.scene;
-        model.scale.set(1.5, 1.5, 1.5);
+            // set position to the bottom-right
+            const offsetX = 1.15; // Adjust as needed
+            const offsetY = -0.75; // Adjust as needed
+            const x = camera.right - offsetX;
+            const y = camera.bottom - offsetY;
 
-        // set position to the bottom-right
-        const offsetX = 1.15; // Adjust as needed
-        const offsetY = -0.75; // Adjust as needed
-        const x = camera.right - offsetX;
-        const y = camera.bottom - offsetY; // stack above if needed
-        model.position.set(x, y, -3)
-        model.rotation.set(Math.PI/2, 0, 0);
-        model.visible = false;
-        diskModels[2] = model;
-        scene.add(model);
-        updateDiskPositions();
-    }
-);
+            playerModel.position.set(x, y, -3)
+            playerModel.rotation.set(Math.PI/2, 0, 0);
 
-// Load disk4.glb
-gltfLoader.load(
-    '/models/disk4.glb',
-    (gltf) => {
-        const model = gltf.scene;
-        model.scale.set(1.5, 1.5, 1.5);
+            // Animation setup for Start/Stop
+            if (gltf.animations && gltf.animations.length > 0) {
+                playerMixer = new THREE.AnimationMixer(playerModel);
+                playerActions = {};
+                gltf.animations.forEach(clip => {
+                    playerActions[clip.name] = playerMixer.clipAction(clip);
+                    playerActions[clip.name].loop = THREE.LoopOnce;
+                    playerActions[clip.name].clampWhenFinished = true;
+                });
+            }
+            scene.add(playerModel);
+        }
+    );
+}
 
-        // set position to the bottom-right
-        const offsetX = 1.15; // Adjust as needed
-        const offsetY = -0.75; // Adjust as needed
-        const x = camera.right - offsetX;
-        const y = camera.bottom - offsetY; // stack above if needed
-        model.position.set(x, y, -3)
-        model.rotation.set(Math.PI/2, 0, 0);
-        model.visible = false;
-        diskModels[3] = model;
-        scene.add(model);
-        updateDiskPositions();
-    }
-);
+if(!isMobileDevice) {
+    // Load disk1.glb
+    gltfLoader.load(
+        '/models/disk1.glb',
+        (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1.5, 1.5, 1.5);
+    
+            // set position to the bottom-right
+            const offsetX = 1.15; // Adjust as needed
+            const offsetY = -0.75; // Adjust as needed
+            const x = camera.right - offsetX;
+            const y = camera.bottom - offsetY;
+            model.position.set(x, y, -3)
+            model.rotation.set(Math.PI/2, 0, 0);
+            model.visible = true;
+            diskModels[0] = model;
+            scene.add(model);
+            updateDiskPositions();
+        }
+    );
+    // Load disk2.glb
+    gltfLoader.load(
+        '/models/disk2.glb',
+        (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1.5, 1.5, 1.5);
+
+            // set position to the bottom-right
+            const offsetX = 1.15; // Adjust as needed
+            const offsetY = -0.75; // Adjust as needed
+            const x = camera.right - offsetX;
+            const y = camera.bottom - offsetY; // stack above if needed
+            model.position.set(x, y, -3)
+            model.rotation.set(Math.PI/2, 0, 0);
+            model.visible = false;
+            diskModels[1] = model;
+            scene.add(model);
+            updateDiskPositions();
+        }
+    );
+    // Load disk3.glb
+    gltfLoader.load(
+        '/models/disk3.glb',
+        (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1.5, 1.5, 1.5);
+
+            // set position to the bottom-right
+            const offsetX = 1.15; // Adjust as needed
+            const offsetY = -0.75; // Adjust as needed
+            const x = camera.right - offsetX;
+            const y = camera.bottom - offsetY; // stack above if needed
+            model.position.set(x, y, -3)
+            model.rotation.set(Math.PI/2, 0, 0);
+            model.visible = false;
+            diskModels[2] = model;
+            scene.add(model);
+            updateDiskPositions();
+        }
+    );
+    // Load disk4.glb
+    gltfLoader.load(
+        '/models/disk4.glb',
+        (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1.5, 1.5, 1.5);
+
+            // set position to the bottom-right
+            const offsetX = 1.15; // Adjust as needed
+            const offsetY = -0.75; // Adjust as needed
+            const x = camera.right - offsetX;
+            const y = camera.bottom - offsetY; // stack above if needed
+            model.position.set(x, y, -3)
+            model.rotation.set(Math.PI/2, 0, 0);
+            model.visible = false;
+            diskModels[3] = model;
+            scene.add(model);
+            updateDiskPositions();
+        }
+    );
+}
 
 // Helper: set disk positions based on target
 function updateDiskPositions(transition = false, fromIndex = null, toIndex = null) {
@@ -556,98 +691,125 @@ function processResults(results) {
     // Clear previous hand ray origins
     handRayOrigins = [];
 
-    // Create or update spheres based on the number of landmarks
-    if (results.landmarks && results.landmarks.length > 0) {
-        for (let i = 0; i < results.landmarks.length; i++) {
-            const landmarks = results.landmarks[i]; // landmarks for each hand
+    if (!isMobileDevice) {
+        // for desktop: at most 4 hands
+        if (results.landmarks && results.landmarks.length > 0) {
+            for (let i = 0; i < results.landmarks.length; i++) {
+                const landmarks = results.landmarks[i];
+                let sphereIndex = 0;
+                for (let j = 0; j < landmarks.length; j++) {
+                    const landmark = landmarks[j];
+                    let sphere;
+                    if (sphereIndex < landmarkSpheres[i].length) {
+                        sphere = landmarkSpheres[i][sphereIndex];
+                    } else {
+                        if(j === 4 || j === 8 || j === 12) {
+                            sphere = createLandmarkSphere(0.15);
+                        } else {
+                            sphere = createLandmarkSphere(0.1);
+                        }
+                        landmarkSpheres[i].push(sphere);
+                    }
+                    let pos = ndcToWorld(-landmark.x * 2 + 1, -landmark.y * 2 + 1);
+                    sphere.position.lerp(new THREE.Vector3(pos.x, pos.y, pos.z), 0.6);
+                    sphereIndex++;
+                }
+                const thumb = landmarks[4];
+                const indexFinger = landmarks[8];
+                const middleFinger = landmarks[12];
+                const rawOrigin = new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z);
+                handRayOrigins.push(rawOrigin);
+                prevHandRayOrigins[i] = rawOrigin;
+                const distanceToIndex = Math.sqrt(
+                    Math.pow(thumb.x - indexFinger.x, 2) +
+                    Math.pow(thumb.y - indexFinger.y, 2) +
+                    Math.pow(thumb.z - indexFinger.z, 2)
+                );
+                const threshold = 0.1;
+                if (distanceToIndex < threshold) {
+                    landmarkSpheres[i][4].material.color.set(0x2e46ff);
+                    landmarkSpheres[i][8].material.color.set(0x2e46ff);
+                    isPinching[i] = true;
+                } else {
+                    landmarkSpheres[i][4].material.color.set(0xffffff);
+                    landmarkSpheres[i][8].material.color.set(0xffffff);
+                    isPinching[i] = false;
+                }
+                while (sphereIndex < landmarkSpheres[i].length) {
+                    const sphere = landmarkSpheres[i].pop();
+                    scene.remove(sphere);
+                }
+            }
+            for (let i = results.landmarks.length; i < HANDS_NUM; i++) {
+                while (landmarkSpheres[i].length > 0) {
+                    const sphere = landmarkSpheres[i].pop();
+                    scene.remove(sphere);
+                }
+            }
+        } else {
+            for(let i = 0; i < HANDS_NUM; i++) {
+                while (landmarkSpheres[i].length > 0) {
+                    const sphere = landmarkSpheres[i].pop();
+                    scene.remove(sphere);
+                }
+            }
+            handRayOrigins = [];
+            for(let p of isPinching){ p = false }
+        }
+    } else {
+        // for mobile: at most 1 hand
+        if (results.landmarks && results.landmarks.length > 0) {
+            const landmarks = results.landmarks[0];
             let sphereIndex = 0;
             for (let j = 0; j < landmarks.length; j++) {
-                const landmark = landmarks[j]; // target landmark
+                const landmark = landmarks[j];
                 let sphere;
-                if (sphereIndex < landmarkSpheres[i].length) {
-                    // Update existing sphere
-                    sphere = landmarkSpheres[i][sphereIndex];
+                if (sphereIndex < landmarkSpheres[0].length) {
+                    sphere = landmarkSpheres[0][sphereIndex];
                 } else {
-                    // Create new sphere
-                    if(j === 4 || j === 8 || j === 12) { // Thumb, index finger, middle finger
+                    if(j === 4 || j === 8 || j === 12) {
                         sphere = createLandmarkSphere(0.15);
-                    }
-                    else {
+                    } else {
                         sphere = createLandmarkSphere(0.1);
                     }
-                    landmarkSpheres[i].push(sphere);
+                    landmarkSpheres[0].push(sphere);
                 }
-                // Convert landmark coordinates to world coordinates
-                // Mirror x-axis
                 let pos = ndcToWorld(-landmark.x * 2 + 1, -landmark.y * 2 + 1);
-  
-                // Smoothly update the position using lerp
                 sphere.position.lerp(new THREE.Vector3(pos.x, pos.y, pos.z), 0.6);
                 sphereIndex++;
             }
-  
-            // Calculate distance between thumb (j=4) and index finger (j=8) or middle finger (j=12)
             const thumb = landmarks[4];
             const indexFinger = landmarks[8];
             const middleFinger = landmarks[12];
-  
-            // mirror x-axis
-            // smoothingをやめて生の値をそのまま使う
             const rawOrigin = new THREE.Vector3(-indexFinger.x * 2 + 1, -indexFinger.y * 2 + 1, -indexFinger.z);
             handRayOrigins.push(rawOrigin);
-            prevHandRayOrigins[i] = rawOrigin;
-  
+            prevHandRayOrigins[0] = rawOrigin;
             const distanceToIndex = Math.sqrt(
                 Math.pow(thumb.x - indexFinger.x, 2) +
                 Math.pow(thumb.y - indexFinger.y, 2) +
                 Math.pow(thumb.z - indexFinger.z, 2)
             );
-  
-            const distanceToMiddle = Math.sqrt(
-                Math.pow(thumb.x - middleFinger.x, 2) +
-                Math.pow(thumb.y - middleFinger.y, 2) +
-                Math.pow(thumb.z - indexFinger.z, 2)
-            );
-  
-            const threshold = 0.1; // Set your threshold distance here
-  
+            const threshold = 0.15;
             if (distanceToIndex < threshold) {
-                // Change color of thumb and index finger spheres if distance is below threshold
-                landmarkSpheres[i][4].material.color.set(0x2e46ff); // Change thumb color
-                landmarkSpheres[i][8].material.color.set(0x2e46ff); // Change index finger color
-                isPinching[i] = true;
+                landmarkSpheres[0][4].material.color.set(0x2e46ff);
+                landmarkSpheres[0][8].material.color.set(0x2e46ff);
+                isPinching[0] = true;
             } else {
-                // Reset color of thumb and index finger spheres
-                landmarkSpheres[i][4].material.color.set(0xffffff); // Change thumb color
-                landmarkSpheres[i][8].material.color.set(0xffffff); // Change index finger color
-                isPinching[i] = false;
+                landmarkSpheres[0][4].material.color.set(0xffffff);
+                landmarkSpheres[0][8].material.color.set(0xffffff);
+                isPinching[0] = false;
             }
-
-            // Remove any extra spheres
-            while (sphereIndex < landmarkSpheres[i].length) {
-                const sphere = landmarkSpheres[i].pop();
-                scene.remove(sphere);
-                // handRayOrigins = [];
-            }
-        }
-        // --- 追加: 検出されなかった手のsphereも消す ---
-        for (let i = results.landmarks.length; i < HANDS_NUM; i++) {
-            while (landmarkSpheres[i].length > 0) {
-                const sphere = landmarkSpheres[i].pop();
+            while (sphereIndex < landmarkSpheres[0].length) {
+                const sphere = landmarkSpheres[0].pop();
                 scene.remove(sphere);
             }
-        }
-    } else {
-        // No landmarks detected, remove all spheres
-        for(let i = 0; i < HANDS_NUM; i++) {
-            while (landmarkSpheres[i].length > 0) {
-                const sphere = landmarkSpheres[i].pop();
+        } else {
+            while (landmarkSpheres[0].length > 0) {
+                const sphere = landmarkSpheres[0].pop();
                 scene.remove(sphere);
             }
-        }
-        handRayOrigins = [];
-        for(let p of isPinching){
-            p = false
+            handRayOrigins = [];
+            isPinching[0] = false;
         }
     }
 }
@@ -659,15 +821,23 @@ const videoPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 1.5),
     new THREE.MeshBasicMaterial({ map: vidTexture })
 )
-// videoPlane.rotation.y = Math.PI;
 videoPlane.position.x = 2
 videoPlane.position.y = -2
 videoPlane.position.z = 1
-// scene.add(videoPlane);
+
+if(isDebug) {
+    scene.add(videoPlane);
+}
 
 let currentInstrumentIndex = 0;
 
-const instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
+let instruments;
+if(!isMobileDevice) {
+    instruments = ['default', 'piano', 'guitar-acoustic', 'violin'];
+} else {
+    // Mobile devices have fewer instruments
+    instruments = ['default'];
+}
 
 function switchInstrument() {
     currentInstrumentIndex = (currentInstrumentIndex + 1) % instruments.length;
@@ -675,7 +845,176 @@ function switchInstrument() {
 
 const tickMobile = () =>
 {
-    window.requestAnimationFrame(tickMobile);
+    // Change cat scale based on audio input
+    const values = analyser.getValue();
+    if (!values || values.length === 0) {
+        return;
+    }
+
+    const averageValue = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const scaleValue = mapRange(averageValue, -120, -90, 0.75, 0.25);
+
+    if (cat) {
+        if (scaleValue && isFinite(scaleValue)) {
+            const targetScale = new THREE.Vector3(scaleValue, scaleValue, scaleValue);
+            cat.scale.lerp(targetScale, 0.8); // Smoothly interpolate to the target scale
+        }
+    }
+
+    // Animation
+    // Rotate notes
+    const deltaTime = clock.getDelta();
+    for (const note of notes) {
+        note.rotation.x += note.rotationSpeed.x * deltaTime;
+        note.rotation.y += note.rotationSpeed.y * deltaTime;
+        note.rotation.z += note.rotationSpeed.z * deltaTime;
+    }
+
+    if (playerMixer) {
+        playerMixer.update(deltaTime); // Update player model animation
+    }
+
+    // Cast rays
+    const objectsToTest = notes;
+    if (handRayOrigins.length > 0) {
+        let intersects = [];
+        for (let i = 0; i < handRayOrigins.length; i++) {
+            const rayOrigin = handRayOrigins[i];
+            raycaster[i].setFromCamera(rayOrigin, camera);
+            let tempIntersects = raycaster[i].intersectObjects(objectsToTest);
+            for (const intersect of tempIntersects) {
+                intersect.rayIndex = i;
+            }
+            intersects = intersects.concat(tempIntersects);
+
+            // Cat interaction (existing)
+            if (cat) {
+                modelIntersects = raycaster[i].intersectObject(cat, true);
+                if (modelIntersects.length) {
+                    if (currentModelIntersect === null) {
+                        playRandomMeow();
+                    }
+                    currentModelIntersect = modelIntersects[0];
+                } else {
+                    currentModelIntersect = null;
+                }
+            }
+        }
+
+        // reset to default
+        for (const object of objectsToTest) {
+            object.scale.set(1, 1, 1);
+        }
+
+        // change scale if intersect
+        for (const intersect of intersects) {
+            intersect.object.scale.set(1.3, 1.3, 1.3);
+        }
+
+        if (intersects.length) {
+            currentIntersect = intersects; // Store all intersects
+        } else {
+            currentIntersect = null;
+        }
+
+        // Move objects if pinching
+        for (let i = 0; i < handRayOrigins.length; i++) {
+            if (isPinching[i]) {
+                // if pinching, check if we can grab a note
+                if (!grabbedNotes[i]) {
+                    raycaster[i].setFromCamera(handRayOrigins[i], camera);
+                    const intersects = raycaster[i].intersectObjects(objectsToTest);
+                    if (intersects.length > 0) {
+                        grabbedNotes[i] = intersects[0].object;
+                    }
+                }
+                // if we have a grabbed note, update its position
+                if (grabbedNotes[i]) {
+                    const intersection = new THREE.Vector3();
+                    raycaster[i].ray.intersectPlane(basePlane, intersection);
+                    if (!grabbedNotes[i].intersections) {
+                        grabbedNotes[i].intersections = new Array(HANDS_NUM).fill(null);
+                    }
+                    grabbedNotes[i].intersections[i] = intersection.clone();
+
+                    // Add smoothing using lerp
+                    grabbedNotes[i].position.lerp(grabbedNotes[i].intersections[i], 0.3);
+                }
+            } else {
+                // when not pinching, reset grabbed note
+                grabbedNotes[i] = null;
+            }
+        }
+    }
+
+    // Move Progress bar (keep original movement)
+    progressBar.position.y -= deltaTime * 1.5;
+    if(progressBar.position.y < -4) {
+        progressBar.position.y = 4;
+    }
+
+    // Progress bar raycast (horizontal direction)
+    const progressPosition = new THREE.Vector3(-10, progressBar.position.y, progressBar.position.z);
+    const progressBarDirection = new THREE.Vector3(1, 0, 0);
+    progressRaycaster.set(progressPosition, progressBarDirection);
+    const progressIntersects = progressRaycaster.intersectObjects(objectsToTest);
+    
+    if(isStart){
+        if(progressIntersects.length) {
+            for(const intersect of progressIntersects){
+                intersect.object.scale.set(1.3, 1.3, 1.3);
+            }
+            // Play sound if progress intersects with objects
+            if(currentProgressIntersectsObjects === null || currentProgressIntersectsObjects.length < progressIntersects.length) {
+                const heights = [];
+                for (const intersect of progressIntersects) {
+                    if(currentProgressIntersectsObjects === null){
+                        const ndcX = mapPositionXToNDC(intersect.object.position.x);
+                        heights.push({
+                            'note': intersect.object.position.x, // use x for pitch on mobile
+                            'pos': ndcX
+                        });
+                    } else {
+                        for (let k of currentProgressIntersectsObjects){
+                            if(k.uuid !== intersect.object.uuid){
+                                const ndcX = mapPositionXToNDC(intersect.object.position.x);
+                                heights.push({
+                                    'note': intersect.object.position.x, // use x for pitch on mobile
+                                    'pos': ndcX
+                                });
+                            }
+                        }
+                    }
+                }
+                if(heights.length > 0){
+                    playSound(heights, instruments[currentInstrumentIndex]);
+                }
+            }
+            const temp = progressIntersects.map(inter => inter.object);
+            currentProgressIntersectsObjects = temp;
+        } else {
+            if(currentProgressIntersectsObjects) {
+                for(const object of objectsToTest) {
+                    object.scale.set(1, 1, 1);
+                }
+            }
+            currentProgressIntersectsObjects = null;
+        }
+    }
+
+    // Update hand landmarks
+    if (isStart) {
+        const result = detectFrame();
+        if(result){
+            processResults(result);
+        }
+    }
+    
+    if(isDebug){
+        updateMemoryDisplay();
+    }
+    renderer.render(scene, camera);
+    window.requestAnimationFrame(tickMobile); // Call tickDesktop again on the next frame
 }
 
 const tickDesktop = () => {
@@ -744,7 +1083,7 @@ const tickDesktop = () => {
                     currentModelIntersect = null;
                 }
             }
-            // --- New: Player and Disk interaction ---
+            // Player and Disk interaction
             if (diskModels.length > 0) {
                 for (let d = 0; d < diskModels.length; d++) {
                     const disk = diskModels[d];
@@ -921,6 +1260,7 @@ const tickDesktop = () => {
     if(isDebug){
         updateMemoryDisplay();
     }
+    
     effectComposer.render(); // Render with effects
     window.requestAnimationFrame(tickDesktop); // Call tickDesktop again on the next frame
 }
@@ -999,8 +1339,9 @@ if (muteBtn) {
 }
 
 // Display memory usage for debugging
+let memoryDiv;
 if(isDebug) {
-    const memoryDiv = document.createElement('div');
+    memoryDiv = document.createElement('div');
     memoryDiv.style.position = 'fixed';
     memoryDiv.style.right = '10px';
     memoryDiv.style.bottom = '10px';
@@ -1015,21 +1356,17 @@ if(isDebug) {
 }
 
 function updateMemoryDisplay() {
-  if (window.performance && window.performance.memory) {
-    const used = window.performance.memory.usedJSHeapSize / 1024 / 1024;
-    const total = window.performance.memory.totalJSHeapSize / 1024 / 1024;
-    memoryDiv.innerText = `Memory: ${used.toFixed(1)}MB / ${total.toFixed(1)}MB`;
-  } else {
-    memoryDiv.innerText = 'Memory: N/A';
-  }
-}
-
-function isMobile() {
-    return window.innerWidth < 700 || /iPhone|Android.+Mobile/.test(navigator.userAgent);
+    if (window.performance && window.performance.memory) {
+        const used = window.performance.memory.usedJSHeapSize / 1024 / 1024;
+        const total = window.performance.memory.totalJSHeapSize / 1024 / 1024;
+        memoryDiv.innerText = `Memory: ${used.toFixed(1)}MB / ${total.toFixed(1)}MB`;
+    } else {
+        memoryDiv.innerText = 'Memory: N/A';
+    }
 }
 
 function tick() {
-    if (isMobile()) {
+    if (isMobileDevice) {
         tickMobile();
     } else {
         tickDesktop();

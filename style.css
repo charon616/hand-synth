@@ -149,6 +149,10 @@ h1 {
     cursor: pointer;
 }
 
+.mobile-pic {
+    display: none;
+}
+
 @media (max-width: 600px) {
     html, body
     {
@@ -157,6 +161,14 @@ h1 {
 
     .desktop-title {
         display: none;
+    }
+
+    .desktop-pic {
+        display: none;
+    }
+
+    .mobile-pic {
+        display: block;
     }
 
     .mobile-title {
@@ -198,9 +210,15 @@ h1 {
         backdrop-filter: blur(8px);
     }
 
-    #start-button:hover {
+    #start-button-mobile:hover {
         color: #999393;
         background: white;
+    }
+
+    #start-button-mobile:disabled {
+        color: rgba(255, 255, 255, .3);
+        background: rgba(255, 255, 255, .2);
+        cursor: not-allowed;
     }
 
     #mute-toggle {
@@ -222,5 +240,9 @@ h1 {
 
     #instructions {
         margin-bottom: 6rem;
+    }
+
+    .leftArrow, .rightArrow {
+        display: none;
     }
 }

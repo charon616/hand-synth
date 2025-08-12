@@ -7,3 +7,7 @@ export function mapRange(value, inMin, inMax, outMin, outMax) {
   }
   return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
+
+export function isMobile() {
+    return window.innerWidth < 700 || /iPhone|Android.+Mobile/.test(navigator.userAgent);
+}
