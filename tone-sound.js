@@ -192,14 +192,24 @@ export async function startSound() {
   // Decide on some parameters
   let allowBackgroundPlayback = false; // default false, recommended false
   let forceIOSBehavior = false; // default false, recommended false
+  
+  // Check for unmute library availability
+  console.log('Checking unmute availability:', typeof window.unmute, typeof unmute);
+  
   // Pass it to unmute if the context exists... ie WebAudio is supported
-  if (context && typeof unmute !== 'undefined')
+  if (context && (typeof window.unmute !== 'undefined' || typeof unmute !== 'undefined'))
   {
+    // Use window.unmute if available, fallback to unmute
+    const unmuteFunction = window.unmute || unmute;
+    console.log('Applying unmute with function:', unmuteFunction);
+    
     // If you need to be able to disable unmute at a later time, you can use the returned handle's dispose() method
     // if you don't need to do that (most folks won't) then you can simply ignore the return value
-    let unmuteHandle = unmute(context, allowBackgroundPlayback, forceIOSBehavior);
+    let unmuteHandle = unmuteFunction(context, allowBackgroundPlayback, forceIOSBehavior);
+    console.log('Unmute handle created:', unmuteHandle);
   } else if (context) {
     console.warn('unmute library not found, skipping unmute setup');
+    console.log('Available global functions:', Object.keys(window).filter(key => key.includes('unmute')));
   }
 
   await Tone.start();
