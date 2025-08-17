@@ -193,12 +193,13 @@ export async function startSound() {
   let allowBackgroundPlayback = false; // default false, recommended false
   let forceIOSBehavior = false; // default false, recommended false
   // Pass it to unmute if the context exists... ie WebAudio is supported
-  if (context)
+  if (context && typeof unmute !== 'undefined')
   {
     // If you need to be able to disable unmute at a later time, you can use the returned handle's dispose() method
     // if you don't need to do that (most folks won't) then you can simply ignore the return value
     let unmuteHandle = unmute(context, allowBackgroundPlayback, forceIOSBehavior);
-
+  } else if (context) {
+    console.warn('unmute library not found, skipping unmute setup');
   }
 
   await Tone.start();
