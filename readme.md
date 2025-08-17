@@ -2,6 +2,12 @@
 
 A web-based instrument inspired by rainy days, using the MediaPipe hand detection system and Three.js.
 
+## DEMO
+https://hand-synth.vercel.app/
+
+![スクリーンショット](./Screenshot1.png)
+![スクリーンショット2](./Screenshot2.png)
+
 ## Installation
 
 Run this followed commands:
@@ -61,7 +67,7 @@ and from [Pixabay](https://pixabay.com/)
 2025-03-12
 
 ## Last Updated
-2025-08-13
+2025-08-17
 
 ## Author
 Karin Kiho
