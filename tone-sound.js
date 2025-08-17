@@ -65,11 +65,19 @@ await reverb.generate();
 const effect = new Tone.FeedbackDelay("8n", 1 / 3);
 effect.wet.value = 0.2;
 
-// global panner to control stereo position
-const globalPanner = new Tone.Panner(0);
-globalPanner.connect(effect);
-effect.connect(reverb);
-reverb.toDestination();
+// global panner to control stereo position (desktop only)
+let globalPanner = null;
+
+if (!isMobileDevice) {
+  globalPanner = new Tone.Panner(0);
+  globalPanner.connect(effect);
+  effect.connect(reverb);
+  reverb.toDestination();
+} else {
+  effect.toDestination();
+  // effect.connect(reverb);
+  // reverb.toDestination();
+}
 
 let lastPlayTime = 0; // Track the last play time
 const MIN_PLAY_INTERVAL = 200; // Minimum interval in milliseconds
@@ -148,26 +156,54 @@ export function playSound(heights, instrument = 'default') {
     synth.volume.value = -12;
   }
 
-  // renew globalPanner
-  globalPanner.pan.value = notePos;
+  // renew globalPanner (desktop only)
+  if (!isMobileDevice && globalPanner) {
+    globalPanner.pan.value = notePos;
+  }
 
-  // connect synth to globalPanner
-  synth.connect(globalPanner);
+  // connect synth to globalPanner or effect
+  if (!isMobileDevice && globalPanner) {
+    synth.connect(globalPanner);
+  } else {
+    synth.connect(effect);
+  }
   synth.triggerAttackRelease(ns, "8n", Tone.now(), velocity);
 
   // disconnect synth after a short time
   setTimeout(() => {
     try {
-      synth.disconnect(globalPanner);
+      if (!isMobileDevice && globalPanner) {
+        synth.disconnect(globalPanner);
+      } else {
+        synth.disconnect(effect);
+      }
     } catch(e) {}
     if(instrument === 'default') {
       synth.dispose();
     }
-  }, 500); // 8n
+  }, 800); // 8n
 }
 
 export async function startSound() {
+  // Create an audio context instance if WebAudio is supported
+  let context = (window.AudioContext || window.webkitAudioContext) ?
+    new (window.AudioContext || window.webkitAudioContext)() : null;
+
+  // Decide on some parameters
+  let allowBackgroundPlayback = false; // default false, recommended false
+  let forceIOSBehavior = false; // default false, recommended false
+  // Pass it to unmute if the context exists... ie WebAudio is supported
+  if (context)
+  {
+    // If you need to be able to disable unmute at a later time, you can use the returned handle's dispose() method
+    // if you don't need to do that (most folks won't) then you can simply ignore the return value
+    let unmuteHandle = unmute(context, allowBackgroundPlayback, forceIOSBehavior);
+
+  }
+
   await Tone.start();
+  Tone.Destination.mute = false; // Unmute the destination
+  Tone.context.resume(); // Resume the context if it was suspended
   bgmPlayers[currentBgmIndex].start();
   console.log("audio is ready");
 }

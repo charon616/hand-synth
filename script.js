@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import * as Tone from 'tone';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { mapRange, isMobile } from './utils.js'; // Import mapRange function
+import { mapRange, isMobile, isIOS } from './utils.js'; // Import mapRange function
 
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -1327,8 +1327,16 @@ if (scrollWrapper && leftArrow && rightArrow) {
 // Mute button functionality
 const muteBtn = document.getElementById('mute-toggle');
 const muteIcon = document.getElementById('mute-icon');
-let isMuted = false;
+let isMuted = isIOS() ? true : false; // iOS devices start muted by default
 if (muteBtn) {
+    // Set initial state for iOS
+    if (isIOS()) {
+        Tone.Destination.mute = true;
+        muteBtn.className = 'mute-off';
+        muteIcon.src = '/guide/speaker-slash.svg';
+        muteBtn.querySelector('span').textContent = 'OFF';
+    }
+    
     muteBtn.addEventListener('click', () => {
         isMuted = !isMuted;
         Tone.Destination.mute = isMuted;

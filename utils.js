@@ -11,3 +11,7 @@ export function mapRange(value, inMin, inMax, outMin, outMax) {
 export function isMobile() {
     return window.innerWidth < 700 || /iPhone|Android.+Mobile/.test(navigator.userAgent);
 }
+
+export function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
