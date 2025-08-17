@@ -185,13 +185,22 @@ export function playSound(heights, instrument = 'default') {
 }
 
 export async function startSound() {
+  // Wait for unmute library to load
+  let waitCount = 0;
+  while (waitCount < 50 && typeof window.unmute === 'undefined' && typeof unmute === 'undefined') {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    waitCount++;
+  }
+  
+  console.log('After waiting, unmute availability:', typeof window.unmute, typeof unmute);
+  
   // Create an audio context instance if WebAudio is supported
   let context = (window.AudioContext || window.webkitAudioContext) ?
     new (window.AudioContext || window.webkitAudioContext)() : null;
 
   // Decide on some parameters
   let allowBackgroundPlayback = false; // default false, recommended false
-  let forceIOSBehavior = false; // default false, recommended false
+  let forceIOSBehavior = true; // Force iOS behavior for better mobile compatibility
   
   // Check for unmute library availability
   console.log('Checking unmute availability:', typeof window.unmute, typeof unmute);
@@ -199,22 +208,33 @@ export async function startSound() {
   // Pass it to unmute if the context exists... ie WebAudio is supported
   if (context && (typeof window.unmute !== 'undefined' || typeof unmute !== 'undefined'))
   {
-    // Use window.unmute if available, fallback to unmute
-    const unmuteFunction = window.unmute || unmute;
-    console.log('Applying unmute with function:', unmuteFunction);
-    
-    // If you need to be able to disable unmute at a later time, you can use the returned handle's dispose() method
-    // if you don't need to do that (most folks won't) then you can simply ignore the return value
-    let unmuteHandle = unmuteFunction(context, allowBackgroundPlayback, forceIOSBehavior);
-    console.log('Unmute handle created:', unmuteHandle);
+    try {
+      // Use window.unmute if available, fallback to unmute
+      const unmuteFunction = window.unmute || unmute;
+      console.log('Applying unmute with function:', unmuteFunction);
+      
+      // If you need to be able to disable unmute at a later time, you can use the returned handle's dispose() method
+      // if you don't need to do that (most folks won't) then you can simply ignore the return value
+      let unmuteHandle = unmuteFunction(context, allowBackgroundPlayback, forceIOSBehavior);
+      console.log('Unmute handle created:', unmuteHandle);
+    } catch (error) {
+      console.error('Error applying unmute:', error);
+    }
   } else if (context) {
     console.warn('unmute library not found, skipping unmute setup');
-    console.log('Available global functions:', Object.keys(window).filter(key => key.includes('unmute')));
+    console.log('Available global functions:', Object.keys(window).filter(key => key.toLowerCase().includes('unmute')));
   }
 
   await Tone.start();
+  console.log('Tone.js started, context state:', Tone.context.state);
+  
   Tone.Destination.mute = false; // Unmute the destination
-  Tone.context.resume(); // Resume the context if it was suspended
+  
+  // Ensure context is resumed
+  if (Tone.context.state === 'suspended') {
+    await Tone.context.resume();
+  }
+  
   bgmPlayers[currentBgmIndex].start();
   console.log("audio is ready");
 }

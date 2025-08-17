@@ -13,13 +13,50 @@
     <link rel="manifest" href="/site.webmanifest">
     
     <link rel="stylesheet" href="/style.css">
+
+    <!-- Load unmute library with proper error handling -->
+    <script>
+        window.unmuteLoaded = false;
+        function loadUnmuteLibrary() {
+            // Try multiple CDN sources
+            const cdnUrls = [
+                'https://unpkg.com/unmute@1.0.2/dist/unmute.min.js',
+                'https://cdn.jsdelivr.net/npm/unmute@1.0.2/dist/unmute.min.js',
+                '/unmute.min.js' // local fallback
+            ];
+            
+            let currentIndex = 0;
+            
+            function tryLoadNext() {
+                if (currentIndex >= cdnUrls.length) {
+                    console.error('Failed to load unmute from all sources');
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = cdnUrls[currentIndex];
+                script.onload = function() {
+                    console.log('Unmute loaded successfully from:', cdnUrls[currentIndex]);
+                    window.unmuteLoaded = true;
+                };
+                script.onerror = function() {
+                    console.warn('Failed to load unmute from:', cdnUrls[currentIndex]);
+                    currentIndex++;
+                    tryLoadNext();
+                };
+                document.head.appendChild(script);
+            }
+            
+            tryLoadNext();
+        }
+        
+        loadUnmuteLibrary();
+    </script>
     
     <style>
     </style>
 </head>
 <body>
-    <!-- Unmute library must be loaded before ES modules -->
-    <script src="/unmute.min.js"></script>
     <div id="start-screen">
         <h1 class="desktop-title">
             Hand Synth on a Rainy Day
