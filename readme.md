@@ -5,8 +5,8 @@ A web-based instrument inspired by rainy days, using the MediaPipe hand detectio
 ## DEMO
 https://hand-synth.vercel.app/
 
-![スクリーンショット](./Screenshot1.png)
-![スクリーンショット2](./Screenshot2.png)
+![screenshot1](./Screenshot1.png)
+![screenshot2](./Screenshot2.png)
 
 ## Installation
 
